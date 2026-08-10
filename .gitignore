@@ -9,3 +9,5 @@ env/
 *.egg-info/
 .DS_Store
 Thumbs.db
+artifacts/
+*.pt

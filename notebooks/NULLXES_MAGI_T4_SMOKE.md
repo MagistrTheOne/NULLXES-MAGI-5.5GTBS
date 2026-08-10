@@ -35,7 +35,15 @@ os.kill(os.getpid(), 9)
 
 Expected check line: `hf True <class 'magi.hf.modeling_magi.MagiForCausalLM'>`.
 
-## Cell 3 — quick HF path
+## Cell 3 — training smoke (native AdamW, 20 steps)
+
+```python
+!python scripts/t4_train_smoke.py --device cuda --steps 20 --seq 128
+```
+
+Expected: `loss_improved=true`, `status=OK`, checkpoint under `artifacts/t4_train_smoke/`.
+
+## Cell 4 — quick HF path
 
 ```python
 import torch
