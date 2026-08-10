@@ -32,11 +32,13 @@ class RotaryEmbedding(nn.Module):
         inv_freq = 1.0 / (theta ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
-    def forward(self, seq_len: int, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
-        positions = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
-        freqs = torch.outer(positions, self.inv_freq.to(device=device))
-        cos = freqs.cos()[None, :, None, :]
-        sin = freqs.sin()[None, :, None, :]
+    def forward(self, position_ids: torch.Tensor, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+        # position_ids: [batch, seq]
+        inv_freq = self.inv_freq.to(device=device)
+        flat = position_ids.to(device=device, dtype=inv_freq.dtype).unsqueeze(-1)
+        freqs = flat * inv_freq  # [B, S, d_head/2]
+        cos = freqs.cos()[:, :, None, :]
+        sin = freqs.sin()[:, :, None, :]
         return cos, sin
 
 
@@ -55,6 +57,45 @@ def repeat_kv(x: torch.Tensor, repeat: int) -> torch.Tensor:
     return x.reshape(batch, seq, heads * repeat, head_dim)
 
 
+def build_attention_bias(
+    *,
+    attention_mask: torch.Tensor | None,
+    batch: int,
+    query_len: int,
+    past_len: int,
+    kv_len: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor | None:
+    """Return additive SDPA bias [B, 1, Q, KV], or None when pure causal full-sequence."""
+    has_padding = False
+    if attention_mask is not None:
+        if attention_mask.dim() != 2:
+            raise ValueError("attention_mask must have shape [batch, kv_len]")
+        if attention_mask.shape != (batch, kv_len):
+            raise ValueError(
+                f"attention_mask shape {tuple(attention_mask.shape)} != {(batch, kv_len)}"
+            )
+        has_padding = bool(torch.any(attention_mask == 0).item())
+    needs_explicit_causal = past_len > 0 or query_len != kv_len
+    if not has_padding and not needs_explicit_causal:
+        return None
+
+    blocked = torch.zeros((batch, 1, query_len, kv_len), dtype=torch.bool, device=device)
+    q_pos = torch.arange(past_len, past_len + query_len, device=device)[:, None]
+    k_pos = torch.arange(kv_len, device=device)[None, :]
+    blocked = blocked | (k_pos > q_pos)
+
+    if has_padding:
+        assert attention_mask is not None
+        pad_blocked = attention_mask.to(device=device) == 0
+        blocked = blocked | pad_blocked[:, None, None, :]
+
+    bias = torch.zeros((batch, 1, query_len, kv_len), dtype=dtype, device=device)
+    bias = bias.masked_fill(blocked, torch.finfo(dtype).min)
+    return bias
+
+
 class GQAAttention(nn.Module):
     def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
@@ -69,22 +110,75 @@ class GQAAttention(nn.Module):
         self.o_proj = nn.Linear(cfg.d_model, cfg.d_model, bias=cfg.bias)
         self.rope = RotaryEmbedding(cfg.d_head, cfg.rope_theta)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: torch.Tensor,
+        *,
+        attention_mask: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
+        past_key_value: tuple[torch.Tensor, torch.Tensor] | None = None,
+        use_cache: bool = False,
+        output_attentions: bool = False,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor] | None, torch.Tensor | None]:
         batch, seq, _ = x.shape
+        past_len = 0 if past_key_value is None else int(past_key_value[0].shape[-2])
+        if position_ids is None:
+            position_ids = torch.arange(
+                past_len,
+                past_len + seq,
+                device=x.device,
+                dtype=torch.long,
+            )[None, :].expand(batch, -1)
+
         q = self.q_proj(x).view(batch, seq, self.n_heads, self.d_head)
         k = self.k_proj(x).view(batch, seq, self.n_kv_heads, self.d_head)
         v = self.v_proj(x).view(batch, seq, self.n_kv_heads, self.d_head)
-        cos, sin = self.rope(seq, x.device)
+
+        cos, sin = self.rope(position_ids, x.device)
         q = apply_rope(q, cos, sin)
         k = apply_rope(k, cos, sin)
-        k = repeat_kv(k, self.kv_repeat)
-        v = repeat_kv(v, self.kv_repeat)
-        q = q.transpose(1, 2)
-        k = k.transpose(1, 2)
-        v = v.transpose(1, 2)
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+
+        # Cache stores compact GQA K/V: [B, n_kv_heads, S, d_head]
+        k_cache = k.transpose(1, 2)
+        v_cache = v.transpose(1, 2)
+        if past_key_value is not None:
+            k_cache = torch.cat((past_key_value[0], k_cache), dim=-2)
+            v_cache = torch.cat((past_key_value[1], v_cache), dim=-2)
+        present = (k_cache, v_cache) if use_cache else None
+
+        k_attn = repeat_kv(k_cache.transpose(1, 2), self.kv_repeat).transpose(1, 2)
+        v_attn = repeat_kv(v_cache.transpose(1, 2), self.kv_repeat).transpose(1, 2)
+        q_attn = q.transpose(1, 2)
+        kv_len = k_attn.shape[-2]
+
+        attn_bias = build_attention_bias(
+            attention_mask=attention_mask,
+            batch=batch,
+            query_len=seq,
+            past_len=past_len,
+            kv_len=kv_len,
+            device=x.device,
+            dtype=q_attn.dtype,
+        )
+
+        attn_weights = None
+        if output_attentions or attn_bias is not None:
+            scale = 1.0 / math.sqrt(self.d_head)
+            scores = torch.matmul(q_attn.float(), k_attn.float().transpose(-2, -1)) * scale
+            if attn_bias is not None:
+                scores = scores + attn_bias.float()
+            elif seq == kv_len:
+                causal = torch.ones((seq, kv_len), dtype=torch.bool, device=x.device).triu(1)
+                scores = scores.masked_fill(causal, torch.finfo(scores.dtype).min)
+            weights = torch.softmax(scores, dim=-1).to(dtype=q_attn.dtype)
+            if output_attentions:
+                attn_weights = weights
+            y = torch.matmul(weights, v_attn)
+        else:
+            y = F.scaled_dot_product_attention(q_attn, k_attn, v_attn, is_causal=True)
+
         y = y.transpose(1, 2).contiguous().view(batch, seq, self.d_model)
-        return self.o_proj(y)
+        return self.o_proj(y), present, attn_weights
 
 
 class SwiGLU(nn.Module):

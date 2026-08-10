@@ -25,14 +25,28 @@ model = AutoModelForCausalLM.from_pretrained("./checkpoint")
 model.save_pretrained("./checkpoint-out")
 ```
 
-Registration:
+Without prior `import magi`, saved checkpoints still load via `auto_map`:
 
 ```python
-AutoConfig.register("magi", MagiConfig)
-AutoModelForCausalLM.register(MagiConfig, MagiForCausalLM)
+from transformers import AutoConfig, AutoModelForCausalLM
+
+config = AutoConfig.from_pretrained("./checkpoint", trust_remote_code=True)
+model = AutoModelForCausalLM.from_pretrained("./checkpoint", trust_remote_code=True)
 ```
 
-`MagiForCausalLM` wraps `MAGITransformer`. There is one architecture implementation.
+`magi.hf.configuration_magi` / `modeling_magi` self-register on import.
+
+## Runtime contracts
+
+| API | Status |
+|-----|--------|
+| `attention_mask` | applied in native GQA (pad + causal) |
+| `position_ids` | supported; auto from mask when omitted |
+| `use_cache` / `past_key_values` | real KV cache |
+| `prepare_inputs_for_generation` | last-token cut + cache |
+| `_reorder_cache` | beam reorder |
+| `output_attentions` | real per-layer weights |
+| gradient checkpointing | explicitly unsupported |
 
 ## Names
 
@@ -56,6 +70,8 @@ magi/hf/
   generation.py
   versions.py
 ```
+
+Installable package: `pip install -e .` (`pyproject.toml`).
 
 ## Optional Dependency
 

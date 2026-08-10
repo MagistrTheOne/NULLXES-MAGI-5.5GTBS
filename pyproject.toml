@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nullxes-magi"
+version = "0.1.0"
+description = "NULLXES MAGI-5.5GTBS native architecture and HuggingFace interoperability"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+hf = ["transformers>=4.51.0,<5", "safetensors>=0.4.3"]
+torch = ["torch>=2.3"]
+
+[project.entry-points."magi.plugins"]
+hf_auto = "magi.hf.auto:register_magi_auto_classes"
+
+[tool.setuptools.packages.find]
+include = ["magi*"]
+
+[tool.setuptools.package-data]
+magi = ["py.typed"]
+
+# On install, place a .pth so Transformers Auto classes register without an explicit `import magi`.
+[tool.setuptools.data-files]
+"." = ["packaging/magi_hf_autoload.pth"]

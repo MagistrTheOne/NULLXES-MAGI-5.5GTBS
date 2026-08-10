@@ -1,0 +1,20 @@
+NULLXES MAGI-5.5GTBS smoke corpus for Tesla T4.
+Русский текст для проверки UTF-8 и морфологии: система, мышление, рассуждение.
+English formal: architecture validation, mixture of experts, rotary embeddings.
+English informal: hey, let's check the tokenizer roundtrip on colab.
+Code python: def forward(x): return x @ w.T + b
+Code typescript: const logits = model.generate(inputIds)
+Math latex: \frac{1}{\sqrt{2\pi\sigma^2}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}
+Scientific: gradient checkpointing, attention mask, key-value cache continuity.
+RU/EN switch: модель MAGI использует MoE router с top_k экспертами.
+Symbols and emoji check: alpha β γ δ — ok ✅ 🚀
+Profanity-in-context placeholder: censored_token_fragment_test
+Numbers and code-switch: batch=8 seq=256 dtype=fp16 device=cuda:0
+Repeated patterns for BPE merges: attention attention attention transformer transformer
+router router expert expert shared shared dense dense moe moe smoke smoke
+token token token tokenizer tokenizer tokenizer encode decode roundtrip
+MAGI T4 smoke gate must fit in 15GB VRAM with fp16 weights and short context.
+Проверка конфига, параметрический учёт, dry init, forward, generate.
+More RU informal: короче, гоняем смоук на T4 и смотрим логиты.
+More EN: prepare_inputs_for_generation must keep kv cache continuous.
+Final line: from_zero training path remains canonical for NULLXES MAGI.

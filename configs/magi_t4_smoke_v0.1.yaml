@@ -1,0 +1,73 @@
+# MAGI-T4-SMOKE v0.1 — Colab / Tesla T4 (~15GB) kernel + HF smoke gate
+# Not a program ladder model. Used for GPU forward/generate/tokenizer validation only.
+
+meta:
+  name: MAGI-T4-SMOKE
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  status: hardware_smoke_gate
+  from_zero: true
+  model_class: moe_decoder
+  hardware_target: tesla_t4_15gb
+  claim_class_topology: CALCULATED
+  tokenizer_ref: configs/tokenizer_t4_smoke_v0.1.yaml
+
+architecture:
+  type: decoder_only_prenorm_sparse_moe
+  d_model: 768
+  n_layers: 10
+  n_dense_layers: 2
+  n_moe_layers: 8
+  n_heads: 12
+  n_kv_heads: 4
+  d_head: 64
+  d_ff_dense: 2048
+  d_ff_expert: 512
+  n_routed_experts: 8
+  n_shared_experts: 1
+  top_k: 2
+  vocab_size: 8192
+  tied_embeddings: true
+  norm: rmsnorm
+  rmsnorm_eps: 1.0e-6
+  activation: swiglu
+  positional: rope
+  rope_theta: 10000.0
+  bias: false
+  attention: gqa
+  train_context: 1024
+  infer_context: 2048
+
+moe:
+  gate: sigmoid_normalize_topk
+  gate_dtype: fp32
+  capacity_factor_train_min: 1.0
+  capacity_factor_train_max: 1.25
+  load_balance: aux_loss_free_bias
+  router_z_loss_coeff: 1.0e-5
+  hierarchical_routing_hooks: false
+
+init:
+  emb_std: 0.02
+  residual_std_formula: "0.02 / sqrt(2 * n_layers)"
+  claim_class: HYPOTHESIS
+
+precision:
+  proxy: fp16
+  production: fp16
+  master_weights: fp32
+  router_loss_softmax: fp32
+
+hardware:
+  target: tesla_t4
+  gpu_vram_gb: 15
+  dtype: float16
+  recommended_batch: 1
+  recommended_seq: 256
+  max_seq_smoke: 512
+  notes: "fp16 weights ~0.4GB; leave headroom for activations/KV on 15GB T4"
+
+tokenizer:
+  id: magi_t4_smoke_v0.1
+  config: configs/tokenizer_t4_smoke_v0.1.yaml
+  artifact: tokenizer/artifacts/magi_t4_smoke_v0.1.json

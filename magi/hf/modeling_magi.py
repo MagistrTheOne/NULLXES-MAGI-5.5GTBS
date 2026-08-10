@@ -10,43 +10,101 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from magi.hf.configuration_magi import MagiConfig
-from magi.hf.generation import build_generation_config
-from magi.hf.serialization import save_config_bundle
+try:
+    from magi.hf.configuration_magi import MagiConfig
+    from magi.hf.generation import build_generation_config
+    from magi.hf.serialization import save_config_bundle
+except ImportError:  # checkpoint remote-code layout (flat module names)
+    from configuration_magi import MagiConfig  # type: ignore
+    from generation import build_generation_config  # type: ignore
+
+    def save_config_bundle(config: MagiConfig, output_dir):  # type: ignore
+        output = Path(output_dir)
+        output.mkdir(parents=True, exist_ok=True)
+        config.save_pretrained(output)
+        build_generation_config(config).save_pretrained(output)
+
+
 from magi.model import MAGITransformer
 
 try:
     from transformers import GenerationMixin, PreTrainedModel
     from transformers.modeling_outputs import CausalLMOutputWithPast
 except ImportError as exc:  # pragma: no cover - exercised only without optional dependency
-    raise RuntimeError("magi.hf.modeling_magi requires the optional transformers package") from exc
+    raise ImportError("magi.hf.modeling_magi requires the optional transformers package") from exc
+
+
+class _TiedLMHead(nn.Module):
+    """Linear view over tied embedding weights for HF embedding APIs."""
+
+    def __init__(self, embedding: nn.Embedding) -> None:
+        super().__init__()
+        self.embedding = embedding
+
+    @property
+    def weight(self) -> torch.nn.Parameter:
+        return self.embedding.weight
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        return F.linear(hidden_states, self.embedding.weight)
+
+
+def _past_length(past_key_values: Any) -> int:
+    if past_key_values is None:
+        return 0
+    if hasattr(past_key_values, "get_seq_length"):
+        return int(past_key_values.get_seq_length())
+    if len(past_key_values) == 0:
+        return 0
+    return int(past_key_values[0][0].shape[-2])
+
+
+def _to_legacy_past(past_key_values: Any) -> Any:
+    if past_key_values is None:
+        return None
+    if hasattr(past_key_values, "get_seq_length") and int(past_key_values.get_seq_length()) == 0:
+        return None
+    if hasattr(past_key_values, "to_legacy_cache"):
+        legacy = past_key_values.to_legacy_cache()
+        if not legacy or legacy[0] is None or legacy[0][0] is None:
+            return None
+        return legacy
+    if not past_key_values or past_key_values[0][0] is None:
+        return None
+    return past_key_values
+
+
+def _to_dynamic_past(past_key_values: Any) -> Any:
+    if past_key_values is None:
+        return None
+    from transformers import DynamicCache
+
+    return DynamicCache.from_legacy_cache(past_key_values)
 
 
 class MagiForCausalLM(PreTrainedModel, GenerationMixin):
     config_class = MagiConfig
     base_model_prefix = "model"
-    supports_gradient_checkpointing = True
-    _supports_cache_class = False
+    supports_gradient_checkpointing = False
+    _supports_cache_class = True
     _no_split_modules = ["TransformerBlock", "MoELayer"]
-    _keys_to_ignore_on_load_unexpected = [r"lm_head.weight"]
-    _keys_to_ignore_on_load_missing = [r"lm_head.weight"]
+    _keys_to_ignore_on_load_unexpected = [r"lm_head\.weight"]
 
     def __init__(self, config: MagiConfig) -> None:
         super().__init__(config)
         self.model = MAGITransformer(config.to_native_config())
-        self.gradient_checkpointing = False
         self.generation_config = build_generation_config(config)
         self.post_init()
         self.generation_config = build_generation_config(self.config)
 
     def _init_weights(self, module: nn.Module) -> None:
-        # Native MAGITransformer already applies MAGI initialization.
         return
 
     def forward(
         self,
         input_ids: torch.LongTensor | None = None,
         attention_mask: torch.Tensor | None = None,
+        position_ids: torch.LongTensor | None = None,
         labels: torch.LongTensor | None = None,
         past_key_values: Any | None = None,
         use_cache: bool | None = None,
@@ -57,48 +115,51 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
     ) -> CausalLMOutputWithPast | tuple[Any, ...]:
         if input_ids is None:
             raise ValueError("MagiForCausalLM.forward requires input_ids")
-        del attention_mask, past_key_values, use_cache, kwargs
+        del kwargs
         return_dict = self.config.use_return_dict if return_dict is None else return_dict
         output_attentions = self.config.output_attentions if output_attentions is None else output_attentions
         output_hidden_states = (
             self.config.output_hidden_states if output_hidden_states is None else output_hidden_states
         )
-        if self.gradient_checkpointing and self.training:
+        if use_cache is None:
+            use_cache = False if self.training else bool(getattr(self.config, "use_cache", True))
+        want_dynamic = past_key_values is not None and hasattr(past_key_values, "to_legacy_cache")
+        legacy_past = _to_legacy_past(past_key_values)
 
-            def _forward_blocks(token_ids: torch.Tensor) -> torch.Tensor:
-                return self.model(token_ids, output_hidden_states=False)
-
-            logits = torch.utils.checkpoint.checkpoint(
-                _forward_blocks,
-                input_ids,
-                use_reentrant=False,
-            )
-            hidden_states = None
-        else:
-            native_output = self.model(input_ids, output_hidden_states=bool(output_hidden_states))
-            if output_hidden_states:
-                logits, hidden_states = native_output
-            else:
-                logits = native_output
-                hidden_states = None
+        native = self.model(
+            input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=legacy_past,
+            use_cache=bool(use_cache),
+            output_attentions=bool(output_attentions),
+            output_hidden_states=bool(output_hidden_states),
+            return_dict=True,
+        )
+        logits = native.logits
+        past_out = native.past_key_values
+        if use_cache and past_out is not None and (want_dynamic or self._supports_cache_class):
+            past_out = _to_dynamic_past(past_out)
         loss = None
         if labels is not None:
             shift_logits = logits[:, :-1, :].contiguous()
             shift_labels = labels[:, 1:].contiguous()
+            if attention_mask is not None and attention_mask.shape == labels.shape:
+                shift_labels = shift_labels.masked_fill(attention_mask[:, 1:] == 0, -100)
             loss = F.cross_entropy(
                 shift_logits.view(-1, shift_logits.size(-1)),
                 shift_labels.view(-1),
                 ignore_index=-100,
             )
         if not return_dict:
-            values = (logits, None, hidden_states, None if not output_attentions else None)
+            values = (logits, past_out, native.hidden_states, native.attentions)
             return ((loss,) + values) if loss is not None else values
         return CausalLMOutputWithPast(
             loss=loss,
             logits=logits,
-            past_key_values=None,
-            hidden_states=hidden_states,
-            attentions=None,
+            past_key_values=past_out,
+            hidden_states=native.hidden_states,
+            attentions=native.attentions,
         )
 
     def prepare_inputs_for_generation(
@@ -106,19 +167,42 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
         input_ids: torch.LongTensor,
         past_key_values: Any | None = None,
         attention_mask: torch.Tensor | None = None,
+        position_ids: torch.LongTensor | None = None,
+        use_cache: bool | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        del past_key_values, kwargs
+        del kwargs
+        if attention_mask is not None and position_ids is None:
+            position_ids = attention_mask.long().cumsum(dim=-1) - 1
+            position_ids = position_ids.masked_fill(attention_mask == 0, 0)
+        if _past_length(past_key_values) > 0:
+            input_ids = input_ids[:, -1:]
+            if position_ids is not None:
+                position_ids = position_ids[:, -1:]
         return {
             "input_ids": input_ids,
-            "past_key_values": None,
+            "past_key_values": past_key_values,
             "attention_mask": attention_mask,
-            "use_cache": False,
+            "position_ids": position_ids,
+            "use_cache": True if use_cache is None else use_cache,
         }
 
     def _reorder_cache(self, past_key_values: Any, beam_idx: torch.Tensor) -> Any:
-        del past_key_values, beam_idx
-        return None
+        if past_key_values is None:
+            return None
+        if hasattr(past_key_values, "reorder_cache"):
+            past_key_values.reorder_cache(beam_idx)
+            return past_key_values
+        legacy = _to_legacy_past(past_key_values)
+        reordered: list[tuple[torch.Tensor, torch.Tensor]] = []
+        for layer_past in legacy:
+            reordered.append(
+                tuple(
+                    past_state.index_select(0, beam_idx.to(past_state.device))
+                    for past_state in layer_past
+                )
+            )
+        return _to_dynamic_past(tuple(reordered))
 
     def get_input_embeddings(self) -> nn.Embedding:
         return self.model.token_embedding
@@ -131,17 +215,33 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
             self.tie_weights()
 
     def get_output_embeddings(self) -> nn.Module:
-        return self.model.token_embedding if self.model.lm_head is None else self.model.lm_head
+        if self.model.lm_head is not None:
+            return self.model.lm_head
+        return _TiedLMHead(self.model.token_embedding)
 
     def set_output_embeddings(self, new_embeddings: nn.Module) -> None:
         if self.config.tied_embeddings:
-            if not isinstance(new_embeddings, nn.Embedding):
-                raise TypeError("Tied MAGI output embeddings must be an nn.Embedding")
-            self.set_input_embeddings(new_embeddings)
-        else:
-            if not isinstance(new_embeddings, nn.Linear):
-                raise TypeError("Untied MAGI output embeddings must be an nn.Linear")
-            self.model.lm_head = new_embeddings
+            if isinstance(new_embeddings, _TiedLMHead):
+                self.set_input_embeddings(new_embeddings.embedding)
+                return
+            if isinstance(new_embeddings, nn.Embedding):
+                self.set_input_embeddings(new_embeddings)
+                return
+            if isinstance(new_embeddings, nn.Linear):
+                emb = nn.Embedding(
+                    new_embeddings.out_features,
+                    new_embeddings.in_features,
+                    device=new_embeddings.weight.device,
+                    dtype=new_embeddings.weight.dtype,
+                )
+                with torch.no_grad():
+                    emb.weight.copy_(new_embeddings.weight)
+                self.set_input_embeddings(emb)
+                return
+            raise TypeError("Tied MAGI output embeddings must expose embedding weights")
+        if not isinstance(new_embeddings, nn.Linear):
+            raise TypeError("Untied MAGI output embeddings must be an nn.Linear")
+        self.model.lm_head = new_embeddings
 
     def tie_weights(self) -> None:
         if self.config.tied_embeddings:
@@ -155,7 +255,6 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
         pad_to_multiple_of: int | None = None,
         mean_resizing: bool = True,
     ) -> nn.Embedding:
-        del mean_resizing
         if new_num_tokens is None:
             return self.get_input_embeddings()
         if pad_to_multiple_of is not None and new_num_tokens % pad_to_multiple_of != 0:
@@ -170,6 +269,12 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
         rows = min(old_embedding.num_embeddings, new_num_tokens)
         with torch.no_grad():
             new_embedding.weight[:rows].copy_(old_embedding.weight[:rows])
+            if new_num_tokens > rows:
+                if mean_resizing:
+                    mean = old_embedding.weight.mean(dim=0)
+                    new_embedding.weight[rows:].copy_(mean.unsqueeze(0).expand(new_num_tokens - rows, -1))
+                else:
+                    nn.init.normal_(new_embedding.weight[rows:], mean=0.0, std=0.02)
         self.model.token_embedding = new_embedding
         if self.model.lm_head is not None:
             old_head = self.model.lm_head
@@ -182,6 +287,12 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
             )
             with torch.no_grad():
                 new_head.weight[:rows].copy_(old_head.weight[:rows])
+                if new_num_tokens > rows:
+                    if mean_resizing:
+                        mean = old_head.weight.mean(dim=0)
+                        new_head.weight[rows:].copy_(mean.unsqueeze(0).expand(new_num_tokens - rows, -1))
+                    else:
+                        nn.init.normal_(new_head.weight[rows:], mean=0.0, std=0.02)
                 if old_head.bias is not None and new_head.bias is not None:
                     new_head.bias[:rows].copy_(old_head.bias[:rows])
             self.model.lm_head = new_head
@@ -193,10 +304,13 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
 
     def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs: dict[str, Any] | None = None) -> None:
         del gradient_checkpointing_kwargs
-        self.gradient_checkpointing = True
+        raise RuntimeError(
+            "MagiForCausalLM does not support gradient checkpointing yet. "
+            "supports_gradient_checkpointing=False by contract."
+        )
 
     def gradient_checkpointing_disable(self) -> None:
-        self.gradient_checkpointing = False
+        return
 
     def save_pretrained(self, save_directory: str | Path | None = None, *args: Any, **kwargs: Any):
         if save_directory is None:
@@ -206,4 +320,35 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
         result = super().save_pretrained(output, *args, **kwargs)
         save_config_bundle(self.config, output)
         build_generation_config(self.config).save_pretrained(output)
+        _export_hf_code_files(output)
         return result
+
+
+def _export_hf_code_files(output_dir: Path) -> None:
+    """Export short-name HF modules so Auto*.from_pretrained(trust_remote_code=True) works."""
+    import shutil
+
+    import magi.hf.configuration_magi as configuration_magi
+    import magi.hf.generation as generation_mod
+    import magi.hf.modeling_magi as modeling_magi
+    import magi.hf.versions as versions_mod
+
+    for module in (configuration_magi, modeling_magi, generation_mod, versions_mod):
+        source = Path(module.__file__)
+        shutil.copy2(source, output_dir / source.name)
+
+
+def _register_auto_model() -> None:
+    try:
+        from transformers import AutoModelForCausalLM
+    except ImportError:
+        return
+    try:
+        AutoModelForCausalLM.register(MagiConfig, MagiForCausalLM)
+    except ValueError:
+        mapping = getattr(AutoModelForCausalLM, "_model_mapping", None)
+        if mapping is not None and mapping.get(MagiConfig) is not MagiForCausalLM:
+            raise
+
+
+_register_auto_model()

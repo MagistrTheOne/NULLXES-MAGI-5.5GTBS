@@ -7,7 +7,7 @@ try:
 
     if not HF_AUTO_REGISTERED:
         HF_AUTO_REGISTERED = register_magi_auto_classes()
-except Exception:
+except (ImportError, ModuleNotFoundError):
     HF_AUTO_REGISTERED = False
 
 __all__ = ["HF_AUTO_REGISTERED", "ModelConfig", "load_model_config"]

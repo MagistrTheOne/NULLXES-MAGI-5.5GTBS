@@ -5,17 +5,26 @@ from __future__ import annotations
 from pathlib import Path
 
 from magi.config import ModelConfig, load_model_config, load_simple_yaml
-from magi.hf.versions import (
-    ARCHITECTURE_VERSION,
-    CHECKPOINT_VERSION,
-    CONFIG_VERSION,
-    SERIALIZATION_VERSION,
-)
+
+try:
+    from magi.hf.versions import (
+        ARCHITECTURE_VERSION,
+        CHECKPOINT_VERSION,
+        CONFIG_VERSION,
+        SERIALIZATION_VERSION,
+    )
+except ImportError:  # checkpoint remote-code layout
+    from versions import (  # type: ignore
+        ARCHITECTURE_VERSION,
+        CHECKPOINT_VERSION,
+        CONFIG_VERSION,
+        SERIALIZATION_VERSION,
+    )
 
 try:
     from transformers import PretrainedConfig
 except ImportError as exc:  # pragma: no cover - exercised only without optional dependency
-    raise RuntimeError("magi.hf.configuration_magi requires the optional transformers package") from exc
+    raise ImportError("magi.hf.configuration_magi requires the optional transformers package") from exc
 
 
 class MagiConfig(PretrainedConfig):
@@ -59,6 +68,7 @@ class MagiConfig(PretrainedConfig):
         kwargs.pop("top_k", None)
         kwargs.setdefault("architectures", ["MagiForCausalLM"])
         kwargs.setdefault("tie_word_embeddings", tied_embeddings)
+        kwargs.setdefault("use_cache", True)
         super().__init__(**kwargs)
         self.name = name
         self.model_class = model_class
@@ -91,10 +101,34 @@ class MagiConfig(PretrainedConfig):
         if "top_k" in self.__dict__:
             del self.__dict__["top_k"]
         self.auto_map = {
-            "AutoConfig": "magi.hf.configuration_magi.MagiConfig",
-            "AutoModelForCausalLM": "magi.hf.modeling_magi.MagiForCausalLM",
+            "AutoConfig": "configuration_magi.MagiConfig",
+            "AutoModelForCausalLM": "modeling_magi.MagiForCausalLM",
         }
         self.validate()
+
+    @property
+    def num_hidden_layers(self) -> int:
+        return int(self.n_layers)
+
+    @num_hidden_layers.setter
+    def num_hidden_layers(self, value: int) -> None:
+        self.n_layers = int(value)
+
+    @property
+    def hidden_size(self) -> int:
+        return int(self.d_model)
+
+    @hidden_size.setter
+    def hidden_size(self, value: int) -> None:
+        self.d_model = int(value)
+
+    @property
+    def num_attention_heads(self) -> int:
+        return int(self.n_heads)
+
+    @num_attention_heads.setter
+    def num_attention_heads(self, value: int) -> None:
+        self.n_heads = int(value)
 
     @classmethod
     def from_native_config(
@@ -236,3 +270,20 @@ class MagiConfig(PretrainedConfig):
 
 def _optional_int(value: int | str | None) -> int | None:
     return None if value is None else int(value)
+
+
+def _register_auto_config() -> None:
+    try:
+        from transformers import AutoConfig
+    except ImportError:
+        return
+    try:
+        AutoConfig.register(MagiConfig.model_type, MagiConfig)
+    except ValueError:
+        registered = AutoConfig.for_model(MagiConfig.model_type)
+        if registered is not MagiConfig:
+            raise
+
+
+_register_auto_config()
+

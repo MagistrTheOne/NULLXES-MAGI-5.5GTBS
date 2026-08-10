@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from magi.hf.auto import register_magi_auto_classes
 from magi.hf.versions import (
     ARCHITECTURE_VERSION,
     CHECKPOINT_VERSION,
@@ -17,7 +16,13 @@ MagiForCausalLM = None  # type: ignore[assignment]
 
 
 def _unavailable(*_args, **_kwargs):
-    raise RuntimeError("magi.hf requires the optional transformers package")
+    raise ImportError("magi.hf requires the optional transformers package")
+
+
+def register_magi_auto_classes() -> bool:
+    from magi.hf.auto import register_magi_auto_classes as _register
+
+    return _register()
 
 
 native_config_to_hf = _unavailable
@@ -41,7 +46,7 @@ try:
 
     HF_AVAILABLE = True
     HF_AUTO_REGISTERED = register_magi_auto_classes()
-except Exception:
+except (ImportError, ModuleNotFoundError):
     HF_AVAILABLE = False
     HF_AUTO_REGISTERED = False
 
