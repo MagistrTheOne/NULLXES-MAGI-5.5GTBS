@@ -26,5 +26,6 @@ train:
 
 hardware:
   target: tesla_t4
-  dtype: float16
-  notes: "seq 128 x batch 1 keeps activation headroom on 15GB T4"
+  master_weights: float32
+  compute: float16_autocast
+  notes: "fp32 master weights + fp16 autocast; seq 128 x batch 1 for 15GB T4"

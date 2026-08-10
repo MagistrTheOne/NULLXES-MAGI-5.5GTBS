@@ -114,6 +114,15 @@ def train_steps(
         eps=config.eps,
         weight_decay=config.weight_decay,
     )
+    if config.use_amp and device.type == "cuda":
+        for param in model.parameters():
+            if param.dtype != torch.float32:
+                raise ValueError(
+                    "AMP GradScaler requires fp32 master weights; "
+                    f"found parameter dtype={param.dtype}. "
+                    "Move model with .to(device) only, not dtype=float16."
+                )
+
     scaler = _make_scaler(config.use_amp and device.type == "cuda", device.type)
     history: list[TrainMetrics] = []
 

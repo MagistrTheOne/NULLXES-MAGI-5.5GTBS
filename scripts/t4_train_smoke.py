@@ -68,8 +68,9 @@ def main() -> int:
     print(f"steps={steps} seq={seq_len} batch={batch_size} lr={lr}")
     print(f"corpus_lines={len(texts)}")
 
-    dtype = torch.float16 if device.type == "cuda" else torch.float32
-    model = MAGITransformer.from_config(cfg).to(device=device, dtype=dtype)
+    # Keep master weights in fp32. CUDA AMP autocast handles compute dtype;
+    # GradScaler rejects FP16 parameter gradients.
+    model = MAGITransformer.from_config(cfg).to(device=device)
     batches = pack_texts(
         tokenizer,
         texts,
