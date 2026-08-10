@@ -50,16 +50,30 @@ class MAGITransformer(nn.Module):
         with torch.device(device):
             return cls(cfg)
 
-    def forward(self, input_ids: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        *,
+        output_hidden_states: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
         if input_ids.dtype not in (torch.int32, torch.int64):
             raise TypeError("input_ids must be integer token ids")
         x = self.token_embedding(input_ids)
+        hidden_states: list[torch.Tensor] = [x] if output_hidden_states else []
         for block in self.blocks:
             x = block(x)
+            if output_hidden_states:
+                hidden_states.append(x)
         x = self.final_norm(x)
+        if output_hidden_states:
+            hidden_states.append(x)
         if self.lm_head is None:
-            return x @ self.token_embedding.weight.t()
-        return self.lm_head(x)
+            logits = x @ self.token_embedding.weight.t()
+        else:
+            logits = self.lm_head(x)
+        if output_hidden_states:
+            return logits, tuple(hidden_states)
+        return logits
 
     def parameter_count(self) -> int:
         return sum(parameter.numel() for parameter in self.parameters())
