@@ -1,0 +1,8 @@
+{
+  "dataset_id": "magi_synth_v0.1",
+  "eval_sets_checked": [],
+  "notes": "No external eval corpora linked in v0.1 synthetic bring-up.",
+  "overlap_count": 0,
+  "status": "clean_synthetic_v0.1",
+  "version": "v0.1"
+}

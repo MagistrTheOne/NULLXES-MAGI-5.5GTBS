@@ -1,0 +1,23 @@
+{
+  "dataset_id": "magi_synth_v0.1",
+  "domain_histogram": {
+    "dialogue": 7,
+    "mathematics": 13,
+    "multilingual": 10,
+    "programming": 8,
+    "reasoning": 4,
+    "science": 9,
+    "structured_data": 5,
+    "systems": 8
+  },
+  "generator_id": "magi_synth_templates_v0.1",
+  "n_docs": 64,
+  "pin_pass_rate": 1.0,
+  "records_path": "D:\\NULLXES\\NULLXES MAGI 5.5 GTBS\\data\\synthetic\\magi_synth_v0.1\\golden\\records.jsonl",
+  "seed": 42,
+  "seq_len": 128,
+  "shard_token_count": 5248,
+  "status": "OK",
+  "token_count": 5319,
+  "version": "v0.1"
+}

@@ -1,0 +1,29 @@
+{
+  "domain_weights": {
+    "dialogue": 0.1,
+    "mathematics": 0.16,
+    "multilingual": 0.12,
+    "programming": 0.16,
+    "reasoning": 0.14,
+    "science": 0.12,
+    "structured_data": 0.08,
+    "systems": 0.12
+  },
+  "external_llm_runtime": false,
+  "generator_id": "magi_synth_templates_v0.1",
+  "license_status": "NULLXES_SYNTHETIC",
+  "n_docs": 64,
+  "prompt_families": [
+    "math_arithmetic_v1",
+    "code_snippet_v1",
+    "syllogism_v1",
+    "unit_measure_v1",
+    "systems_component_v1",
+    "bilingual_term_v1",
+    "qa_intent_v1",
+    "json_kv_v1"
+  ],
+  "seed": 42,
+  "semantic_pins_required": true,
+  "version": "v0.1"
+}

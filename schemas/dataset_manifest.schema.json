@@ -23,7 +23,7 @@
     },
     "license_status": {
       "type": "string",
-      "enum": ["approved", "unknown", "rejected", "quarantine"]
+      "enum": ["approved", "unknown", "rejected", "quarantine", "NULLXES_SYNTHETIC"]
     },
     "license_reference": { "type": ["string", "null"] },
     "domains": {

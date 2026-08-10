@@ -43,7 +43,17 @@ Expected check line: `hf True <class 'magi.hf.modeling_magi.MagiForCausalLM'>`.
 
 Expected: `loss_improved=true`, `status=OK`, checkpoint under `artifacts/t4_train_smoke/`.
 
-## Cell 4 — quick HF path
+## Cell 4 — synthetic dataset + train on it
+
+```python
+!python scripts/build_synthetic_dataset.py --docs 2000 --seed 42 --seq 128
+!python scripts/t4_train_smoke.py --device cuda --steps 20 --seq 128 \
+  --corpus artifacts/synthetic/magi_synth_v0.1/records.jsonl
+# or packed shard:
+# !python scripts/t4_train_smoke.py --device cuda --steps 20 --shard artifacts/synthetic/magi_synth_v0.1/shards/train-00000.bin
+```
+
+## Cell 5 — quick HF path
 
 ```python
 import torch

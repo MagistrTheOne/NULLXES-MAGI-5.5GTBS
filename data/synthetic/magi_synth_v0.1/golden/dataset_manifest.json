@@ -1,0 +1,36 @@
+{
+  "dataset_id": "magi_synth_v0.1",
+  "domains": [
+    "dialogue",
+    "mathematics",
+    "multilingual",
+    "programming",
+    "reasoning",
+    "science",
+    "structured_data",
+    "systems"
+  ],
+  "hashes": {
+    "normalized_hash": "1002ed9a514b388494f4dfaf6df72bdb783ef13f79fcefe9320d726c51fbd516",
+    "raw_manifest_hash": "893d8e670d44a70fccc013d8ee681bbdd3d034ec3118cab746af76df43914aea"
+  },
+  "language_distribution": {
+    "en": 0.84375,
+    "ru_en": 0.15625
+  },
+  "license_reference": "NULLXES_SYNTHETIC",
+  "license_status": "NULLXES_SYNTHETIC",
+  "provenance": {
+    "capture_method": "deterministic_template_generator",
+    "captured_at": "2026-08-10T23:49:03Z",
+    "owner": "NULLXES",
+    "source_uri": null
+  },
+  "source_type": "nullxes_synthetic",
+  "synthetic": {
+    "generator_id": "magi_synth_templates_v0.1",
+    "is_synthetic": true,
+    "semantic_pins_required": true
+  },
+  "version": "v0.1"
+}

@@ -21,7 +21,7 @@ from magi.config import load_model_config, load_simple_yaml
 from magi.model import MAGITransformer
 from magi.tokenizer import build_t4_smoke_tokenizer
 from magi.train import TrainConfig, load_train_checkpoint, pack_texts, save_train_checkpoint, train_steps
-from magi.train.data import load_corpus_lines
+from magi.train.data import load_corpus_lines, load_shard_batches
 
 
 def main() -> int:
@@ -38,12 +38,28 @@ def main() -> int:
     parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
     parser.add_argument("--skip-checkpoint", action="store_true")
+    parser.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="plain .txt or synthetic records.jsonl (overrides profile corpus)",
+    )
+    parser.add_argument(
+        "--shard",
+        type=Path,
+        default=None,
+        help="packed shard .bin from build_synthetic_dataset.py",
+    )
     args = parser.parse_args()
 
     profile = load_simple_yaml(args.profile)
     train_cfg = profile.get("train", {})
     model_config_path = ROOT / str(profile.get("meta", {}).get("model_config", "configs/magi_t4_smoke_v0.1.yaml"))
-    corpus_path = ROOT / str(profile.get("meta", {}).get("corpus", "tokenizer/data/t4_smoke_seed.txt"))
+    corpus_path = Path(args.corpus) if args.corpus is not None else ROOT / str(
+        profile.get("meta", {}).get("corpus", "tokenizer/data/t4_smoke_seed.txt")
+    )
+    if not corpus_path.is_absolute():
+        corpus_path = (ROOT / corpus_path).resolve()
 
     steps = int(args.steps if args.steps is not None else train_cfg.get("steps", 20))
     seq_len = int(args.seq if args.seq is not None else train_cfg.get("seq_len", 128))
@@ -60,25 +76,42 @@ def main() -> int:
 
     cfg = load_model_config(model_config_path)
     tokenizer = build_t4_smoke_tokenizer(vocab_size=cfg.vocab_size)
-    texts = load_corpus_lines(corpus_path)
 
     print("=== TRAIN SMOKE ===")
     print(f"model={cfg.name}")
     print(f"device={device}")
     print(f"steps={steps} seq={seq_len} batch={batch_size} lr={lr}")
-    print(f"corpus_lines={len(texts)}")
 
     # Keep master weights in fp32. CUDA AMP autocast handles compute dtype;
     # GradScaler rejects FP16 parameter gradients.
     model = MAGITransformer.from_config(cfg).to(device=device)
-    batches = pack_texts(
-        tokenizer,
-        texts,
-        seq_len=seq_len,
-        batch_size=batch_size,
-        device=device,
-    )
-    print(f"packed_batches={len(batches)}")
+
+    if args.shard is not None:
+        shard_path = Path(args.shard)
+        if not shard_path.is_absolute():
+            shard_path = (ROOT / shard_path).resolve()
+        batches = load_shard_batches(
+            shard_path,
+            batch_size=batch_size,
+            device=device,
+            pad_id=tokenizer.pad_id,
+        )
+        print(f"shard={shard_path}")
+        print(f"shard_windows_batches={len(batches)}")
+        corpus_hash_src = shard_path
+    else:
+        texts = load_corpus_lines(corpus_path)
+        print(f"corpus={corpus_path}")
+        print(f"corpus_lines={len(texts)}")
+        batches = pack_texts(
+            tokenizer,
+            texts,
+            seq_len=seq_len,
+            batch_size=batch_size,
+            device=device,
+        )
+        print(f"packed_batches={len(batches)}")
+        corpus_hash_src = corpus_path
 
     result = train_steps(
         model,
@@ -118,7 +151,7 @@ def main() -> int:
             config_path=model_config_path,
             model_name=cfg.name,
             tokenizer_id=tokenizer.tokenizer_id,
-            tokenizer_sha256=file_sha256(corpus_path),
+            tokenizer_sha256=file_sha256(corpus_hash_src),
             metrics=summary,
         )
         loaded = load_train_checkpoint(ckpt, model=MAGITransformer.from_config(cfg), map_location="cpu")

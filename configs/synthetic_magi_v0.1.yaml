@@ -1,0 +1,40 @@
+# MAGI synthetic corpus profile v0.1
+# Deterministic templates only. No external LLM runtime.
+
+meta:
+  name: MAGI_SYNTH_V0.1
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  dataset_id: magi_synth_v0.1
+  generator_id: magi_synth_templates_v0.1
+  license_status: NULLXES_SYNTHETIC
+  source_type: nullxes_synthetic
+
+generate:
+  n_docs: 5000
+  seed: 42
+  exact_dedup: true
+
+domain_weights:
+  mathematics: 0.16
+  programming: 0.16
+  reasoning: 0.14
+  science: 0.12
+  systems: 0.12
+  multilingual: 0.12
+  dialogue: 0.10
+  structured_data: 0.08
+
+tokenizer:
+  vocab_size: 8192
+  paired_model_config: configs/magi_t4_smoke_v0.1.yaml
+
+packing:
+  seq_len: 128
+  shard_id: train-00000
+  split: train
+
+output:
+  root: artifacts/synthetic/magi_synth_v0.1
+  golden_docs: 64
+  golden_root: data/synthetic/magi_synth_v0.1/golden
