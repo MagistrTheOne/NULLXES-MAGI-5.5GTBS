@@ -69,6 +69,22 @@ class MagiConfig(PretrainedConfig):
         kwargs.setdefault("architectures", ["MagiForCausalLM"])
         kwargs.setdefault("tie_word_embeddings", tied_embeddings)
         kwargs.setdefault("use_cache", True)
+        kwargs.setdefault("return_dict", True)
+        # transformers>=5 reads these aliases for cache/generation plumbing.
+        if "num_hidden_layers" in kwargs:
+            n_layers = int(kwargs.pop("num_hidden_layers"))
+        if "hidden_size" in kwargs:
+            d_model = int(kwargs.pop("hidden_size"))
+        if "num_attention_heads" in kwargs:
+            n_heads = int(kwargs.pop("num_attention_heads"))
+        if "num_key_value_heads" in kwargs:
+            n_kv_heads = int(kwargs.pop("num_key_value_heads"))
+        if "head_dim" in kwargs:
+            d_head = int(kwargs.pop("head_dim"))
+        if "max_position_embeddings" in kwargs and infer_context is None and train_context is None:
+            infer_context = int(kwargs.pop("max_position_embeddings"))
+        else:
+            kwargs.pop("max_position_embeddings", None)
         super().__init__(**kwargs)
         self.name = name
         self.model_class = model_class
@@ -100,6 +116,12 @@ class MagiConfig(PretrainedConfig):
         # Never keep sampling top_k on architecture config; MoE width lives in moe_top_k.
         if "top_k" in self.__dict__:
             del self.__dict__["top_k"]
+        # Prefer return_dict; drop deprecated use_return_dict if present on older dumps.
+        if "use_return_dict" in self.__dict__:
+            if "return_dict" not in self.__dict__:
+                self.return_dict = bool(self.__dict__.pop("use_return_dict"))
+            else:
+                del self.__dict__["use_return_dict"]
         self.auto_map = {
             "AutoConfig": "configuration_magi.MagiConfig",
             "AutoModelForCausalLM": "modeling_magi.MagiForCausalLM",
@@ -129,6 +151,30 @@ class MagiConfig(PretrainedConfig):
     @num_attention_heads.setter
     def num_attention_heads(self, value: int) -> None:
         self.n_heads = int(value)
+
+    @property
+    def num_key_value_heads(self) -> int:
+        return int(self.n_kv_heads)
+
+    @num_key_value_heads.setter
+    def num_key_value_heads(self, value: int) -> None:
+        self.n_kv_heads = int(value)
+
+    @property
+    def head_dim(self) -> int:
+        return int(self.d_head)
+
+    @head_dim.setter
+    def head_dim(self, value: int) -> None:
+        self.d_head = int(value)
+
+    @property
+    def max_position_embeddings(self) -> int:
+        return int(self.infer_context or self.train_context or 2048)
+
+    @max_position_embeddings.setter
+    def max_position_embeddings(self, value: int) -> None:
+        self.infer_context = int(value)
 
     @classmethod
     def from_native_config(

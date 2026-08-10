@@ -10,6 +10,8 @@ meta:
   from_zero: true
   model_class: moe_decoder
   claim_class_topology: CALCULATED
+  tokenizer_ref: configs/tokenizer_experiments_v0.1.yaml
+  hf_architecture: MagiForCausalLM
 
 architecture:
   type: decoder_only_prenorm_sparse_moe
@@ -77,6 +79,19 @@ parallelism_template_h200:
   ep: 8
   cp: 1
   dp: remainder
+
+tokenizer:
+  id: magi_tokenizer_v0.1
+  config: configs/tokenizer_experiments_v0.1.yaml
+  vocab_size: 131072
+  mode: production_candidate_matrix
+
+hf:
+  model_type: magi
+  architecture: MagiForCausalLM
+  use_cache: true
+  return_dict: true
+  tie_word_embeddings: false
 
 expected_param_count:
   total: 34054674432

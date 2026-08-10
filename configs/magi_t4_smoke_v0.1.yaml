@@ -71,3 +71,11 @@ tokenizer:
   id: magi_t4_smoke_v0.1
   config: configs/tokenizer_t4_smoke_v0.1.yaml
   artifact: tokenizer/artifacts/magi_t4_smoke_v0.1.json
+  vocab_size: 8192
+
+hf:
+  model_type: magi
+  architecture: MagiForCausalLM
+  use_cache: true
+  return_dict: true
+  tie_word_embeddings: true

@@ -152,11 +152,14 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
         output_attentions: bool | None = None,
         output_hidden_states: bool | None = None,
         return_dict: bool | None = None,
+        cache_position: torch.LongTensor | None = None,
         **kwargs: Any,
     ) -> CausalLMOutputWithPast | tuple[Any, ...]:
         if input_ids is None:
             raise ValueError("MagiForCausalLM.forward requires input_ids")
-        del kwargs
+        # transformers>=5 may pass cache_position / logits_to_keep / etc. Native path uses
+        # attention_mask + position_ids; unused generation kwargs are intentionally ignored.
+        del cache_position, kwargs
         if return_dict is None:
             return_dict = bool(getattr(self.config, "return_dict", True))
         output_attentions = self.config.output_attentions if output_attentions is None else output_attentions

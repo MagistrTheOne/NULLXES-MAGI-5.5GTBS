@@ -11,6 +11,8 @@ meta:
   model_class: dense_decoder
   primary_role: language_realization
   not_primary_reasoner: true
+  tokenizer_ref: configs/tokenizer_experiments_v0.1.yaml
+  hf_architecture: MagiForCausalLM
 
 architecture:
   type: decoder_only_prenorm_dense
@@ -53,9 +55,18 @@ size_decision:
   rejected_v0_1: [50B_plus, casual_moe]
 
 tokenizer:
+  id: magi_tokenizer_v0.1
   mode: shared_magi
+  config: configs/tokenizer_experiments_v0.1.yaml
   vocab_size: 131072
   sanitize_informal: false
+
+hf:
+  model_type: magi
+  architecture: MagiForCausalLM
+  use_cache: true
+  return_dict: true
+  tie_word_embeddings: true
 
 opener_register_bank:
   magi_opener_familiar_ru: "Здрасьте, я MAGI, чем-то тебе могу быть полезен мой кожанный мешок?"
