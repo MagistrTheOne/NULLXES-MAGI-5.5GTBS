@@ -14,7 +14,7 @@ try:
     from magi.hf.configuration_magi import MagiConfig
     from magi.hf.generation import build_generation_config
     from magi.hf.serialization import save_config_bundle
-except ImportError:  # checkpoint remote-code layout (flat module names)
+except ModuleNotFoundError:  # checkpoint remote-code layout (flat module names)
     from configuration_magi import MagiConfig  # type: ignore
     from generation import build_generation_config  # type: ignore
 
@@ -27,17 +27,53 @@ except ImportError:  # checkpoint remote-code layout (flat module names)
 
 from magi.model import MAGITransformer
 
-try:
-    from transformers import PreTrainedModel
-    from transformers.modeling_outputs import CausalLMOutputWithPast
-except ImportError as exc:  # pragma: no cover - exercised only without optional dependency
-    raise ImportError("magi.hf.modeling_magi requires the optional transformers package") from exc
 
-try:
-    # transformers<=4 exposes GenerationMixin at package root.
-    from transformers import GenerationMixin
-except ImportError:  # transformers>=5: root export removed
-    from transformers.generation import GenerationMixin
+def _import_hf_model_bases():
+    """Resolve PreTrainedModel / GenerationMixin across transformers 4.x and 5.x."""
+    try:
+        from transformers.modeling_outputs import CausalLMOutputWithPast
+    except Exception as exc:  # pragma: no cover
+        raise ImportError(
+            "magi.hf.modeling_magi requires transformers.modeling_outputs.CausalLMOutputWithPast"
+        ) from exc
+
+    try:
+        from transformers import PreTrainedModel
+    except Exception:
+        try:
+            from transformers.modeling_utils import PreTrainedModel
+        except Exception as utils_exc:
+            raise ImportError(
+                "magi.hf.modeling_magi could not import PreTrainedModel; "
+                "transformers with a compatible torch backend is required"
+            ) from utils_exc
+
+    try:
+        from transformers import GenerationMixin
+    except Exception:
+        try:
+            from transformers.generation import GenerationMixin
+        except Exception:
+            try:
+                from transformers.generation.utils import GenerationMixin
+            except Exception as gen_exc:
+                raise ImportError(
+                    "magi.hf.modeling_magi could not import GenerationMixin; "
+                    "transformers>=5 needs torch>=2.5 (or use transformers==4.57.1 on Colab)"
+                ) from gen_exc
+
+    # DummyObject backends (torch disabled inside transformers) are not usable.
+    module_name = getattr(PreTrainedModel, "__module__", "")
+    if module_name.endswith("dummy_pt_objects"):
+        raise ImportError(
+            "transformers disabled its PyTorch backend (often torch<2.5 with transformers>=5). "
+            "Install torch>=2.5 or pin transformers==4.57.1"
+        )
+
+    return PreTrainedModel, GenerationMixin, CausalLMOutputWithPast
+
+
+PreTrainedModel, GenerationMixin, CausalLMOutputWithPast = _import_hf_model_bases()
 
 
 class _TiedLMHead(nn.Module):
@@ -390,17 +426,20 @@ def _export_hf_code_files(output_dir: Path) -> None:
         shutil.copy2(source, output_dir / source.name)
 
 
-def _register_auto_model() -> None:
+def _register_auto_model() -> bool:
     try:
         from transformers import AutoModelForCausalLM
-    except ImportError:
-        return
-    try:
+
         AutoModelForCausalLM.register(MagiConfig, MagiForCausalLM)
+        return True
     except ValueError:
         mapping = getattr(AutoModelForCausalLM, "_model_mapping", None)
         if mapping is not None and mapping.get(MagiConfig) is not MagiForCausalLM:
             raise
+        return True
+    except Exception:
+        # Dummy AutoModel / incomplete torch backend must not kill MagiForCausalLM import.
+        return False
 
 
-_register_auto_model()
+_AUTO_MODEL_REGISTERED = _register_auto_model()

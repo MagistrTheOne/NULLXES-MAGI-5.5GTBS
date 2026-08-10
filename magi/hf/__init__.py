@@ -16,13 +16,24 @@ MagiConfig = None  # type: ignore[assignment]
 MagiForCausalLM = None  # type: ignore[assignment]
 
 
+def format_hf_import_error(exc: BaseException | None = None) -> str:
+    err = HF_IMPORT_ERROR if exc is None else exc
+    if err is None:
+        return "unknown import failure"
+    parts = [f"{type(err).__name__}: {err}"]
+    cause = err.__cause__ or err.__context__
+    depth = 0
+    while cause is not None and depth < 4:
+        parts.append(f"caused by {type(cause).__name__}: {cause}")
+        cause = cause.__cause__ or cause.__context__
+        depth += 1
+    return " | ".join(parts)
+
+
 def _unavailable(*_args, **_kwargs):
-    detail = ""
-    if HF_IMPORT_ERROR is not None:
-        detail = f" ({type(HF_IMPORT_ERROR).__name__}: {HF_IMPORT_ERROR})"
     raise ImportError(
-        "magi.hf requires a working transformers install for this API"
-        + detail
+        "magi.hf requires a working transformers+torch install for this API: "
+        + format_hf_import_error()
     ) from HF_IMPORT_ERROR
 
 
@@ -58,20 +69,17 @@ try:
     )
     from magi.hf.modeling_magi import MagiForCausalLM
 
-    HF_AVAILABLE = True
-    HF_AUTO_REGISTERED = register_magi_auto_classes()
-except (ImportError, ModuleNotFoundError) as exc:
+    HF_AVAILABLE = MagiForCausalLM is not None
+except Exception as exc:  # keep MagiConfig/convert if only modeling failed
     HF_AVAILABLE = False
-    HF_AUTO_REGISTERED = False
     HF_IMPORT_ERROR = exc
-    MagiConfig = None  # type: ignore[assignment]
     MagiForCausalLM = None  # type: ignore[assignment]
-    native_config_to_hf = _unavailable
-    hf_config_to_native = _unavailable
-    native_state_dict_to_hf = _unavailable
-    hf_state_dict_to_native = _unavailable
-    save_hf_config_from_native = _unavailable
-    save_native_yaml_from_hf = _unavailable
+else:
+    try:
+        HF_AUTO_REGISTERED = register_magi_auto_classes()
+    except Exception as exc:  # registration must not hide a loaded model class
+        HF_AUTO_REGISTERED = False
+        HF_IMPORT_ERROR = exc
 
 
 __all__ = [
@@ -84,6 +92,7 @@ __all__ = [
     "HF_IMPORT_ERROR",
     "MagiConfig",
     "MagiForCausalLM",
+    "format_hf_import_error",
     "hf_config_to_native",
     "hf_state_dict_to_native",
     "native_config_to_hf",

@@ -20,13 +20,13 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from magi.config import load_model_config
-from magi.hf import HF_AVAILABLE, HF_IMPORT_ERROR, MagiForCausalLM, native_config_to_hf
+from magi.hf import HF_AVAILABLE, MagiForCausalLM, format_hf_import_error, native_config_to_hf
 from magi.model import MAGITransformer
 import param_count
 import torch
 
 if not HF_AVAILABLE or MagiForCausalLM is None:
-    raise SystemExit(f"magi.hf unavailable: {HF_IMPORT_ERROR!r}")
+    raise SystemExit(f"magi.hf unavailable: {format_hf_import_error()}")
 
 
 MODEL_CONFIGS = [
