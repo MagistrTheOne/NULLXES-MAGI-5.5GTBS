@@ -1,0 +1,94 @@
+# MAGI-5.5GTBS envelope v0.1 — FINAL MONSTER program parent
+# Classification: ESTIMATED / HYPOTHESIS unless marked CALCULATED via child configs.
+# Source of truth for ladder membership. Do not invent measured performance.
+
+meta:
+  program: MAGI-5.5GTBS
+  product_name: MAGI-5.5GTBS
+  version: v0.1
+  status: FINAL_MONSTER_ENVELOPE
+  from_zero: true
+  pretrained_backbone_forbidden: true
+  api_cognition_forbidden: true
+
+final_target:
+  name: MAGI-5.5GTBS
+  total_parameters: 5500000000000  # 5.5T — HYPOTHESIS target envelope
+  active_parameters_per_cognitive_cycle_min: 45000000000
+  active_parameters_per_cognitive_cycle_max: 90000000000
+  architecture_class: hierarchical_sparse_moe_recurrent_cognitive_system
+  claim_class: HYPOTHESIS
+
+subsystem_budget_shares_hypothesis:
+  # Shares are NOT frozen until MAGI-400B experiments complete.
+  claim_class: HYPOTHESIS
+  cognitive_cortex: 0.28
+  specialist_expert_mesh: 0.42
+  world_model: 0.08
+  social_tom_model: 0.04
+  self_model: 0.03
+  counterfactual_system: 0.03
+  multimodal_system: 0.06
+  executive_control: 0.04
+  synthetic_drive_system: 0.02
+  note: "CASUAL realization (~13B) is outside this reasoning budget."
+
+scale_ladder:
+  - id: magi_sim
+    class: validation
+    total_params_target: null
+    role: kernels_init_mup
+  - id: val_1b
+    class: validation
+    total_params_target: 1000000000
+    role: blocks_tokenizer_data
+  - id: val_7b
+    class: validation
+    total_params_target: 7000000000
+    role: dense_stability
+  - id: eng_30_70b_moe
+    class: engineering
+    total_params_target_min: 30000000000
+    total_params_target_max: 70000000000
+    role: routing_ep_fp8
+  - id: magi_400b
+    class: baseline_monster
+    config_ref: configs/magi_400b_v0.1.yaml
+    mandatory_gate_for_1t: true
+    role: ">=400B total / ~43B active — required node before 1T+"
+  - id: magi_1t
+    class: scale
+    total_params_target: 1000000000000
+    role: expert_mesh_growth
+    claim_class: HYPOTHESIS
+  - id: multi_trillion
+    class: scale
+    role: hierarchical_routing_memory_world_hooks
+    claim_class: HYPOTHESIS
+  - id: magi_5_5gtbs
+    class: FINAL_MONSTER
+    total_params_target: 5500000000000
+    role: full_system_decomposition
+
+gates:
+  before_1t:
+    - magi_400b_param_reconcile_pass
+    - magi_400b_routing_stability_gate
+    - magi_400b_no_expert_collapse_gate
+  before_5_5t:
+    - measured_allocation_from_400b_and_1t
+    - recurrent_cognition_hooks_validated
+    - memory_world_self_interfaces_stable
+
+hardware_policy:
+  proxy: H200
+  production_pretrain: B300
+  forbidden: [H100, A100, consumer_gpu_as_production_default]
+
+casual_subsystem:
+  config_ref: configs/magi_casual_v0.1.yaml
+  outside_reasoning_budget: true
+  role: language_realization_and_social_strategy
+
+policy_router:
+  config_ref: configs/policy_interface_v0.1.yaml

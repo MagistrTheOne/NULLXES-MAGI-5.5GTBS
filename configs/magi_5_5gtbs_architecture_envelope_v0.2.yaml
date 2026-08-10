@@ -1,0 +1,119 @@
+# MAGI-5.5GTBS master architecture envelope v0.2
+# Final monster architecture parent. Claims are HYPOTHESIS unless explicitly CALCULATED by child configs.
+
+meta:
+  name: MAGI-5.5GTBS
+  version: v0.2
+  status: final_monster_master_envelope
+  from_zero: true
+  pretrained_backbone_forbidden: true
+  api_cognition_forbidden: true
+
+active_compute_law:
+  total_parameters_target: 5500000000000
+  active_parameters_per_cognitive_cycle_min: 45000000000
+  active_parameters_per_cognitive_cycle_max: 90000000000
+  claim_class: HYPOTHESIS
+
+ladder:
+  first_trainable_gate: MAGI-35B-MoE-A8B
+  baseline_monster: MAGI-400B
+  scale_gate: MAGI-1T
+  final: MAGI-5.5GTBS
+  toy_model_start_forbidden: true
+
+subsystem_envelope:
+  cognitive_cortex:
+    share: 0.28
+    target_params: 1540000000000
+    role: decoder_moe_recurrent_cortex
+  specialist_expert_mesh:
+    share: 0.42
+    target_params: 2310000000000
+    role: hierarchical_sparse_experts
+  world_model:
+    share: 0.08
+    target_params: 440000000000
+    role: predictive_state_transitions
+  social_tom_model:
+    share: 0.04
+    target_params: 220000000000
+    role: agents_social_uncertainty
+  self_model:
+    share: 0.03
+    target_params: 165000000000
+    role: computational_self_state
+  counterfactual_system:
+    share: 0.03
+    target_params: 165000000000
+    role: alternative_trajectory_simulation
+  multimodal_system:
+    share: 0.06
+    target_params: 330000000000
+    role: later_grounding
+  executive_control:
+    share: 0.04
+    target_params: 220000000000
+    role: arbitration_compute_budget_policy
+  synthetic_drive_system:
+    share: 0.02
+    target_params: 110000000000
+    role: bounded_internal_control_variables
+  claim_class: HYPOTHESIS
+
+routing_hierarchy:
+  stages:
+    - state_router
+    - domain_router
+    - cognitive_router
+    - expert_family_router
+    - specialist_expert_router
+  hard_constraint_precedence: true
+  router_metrics_required: true
+
+recurrent_cognition:
+  cycle:
+    - perceive
+    - update_world_state
+    - retrieve_memory
+    - generate_internal_state
+    - route_experts
+    - simulate
+    - critique
+    - update
+    - act_or_repeat
+  explicit_runtime_state_required: true
+  hidden_prompt_loop_forbidden: true
+
+memory_interfaces:
+  M0: working_state
+  M1: episodic_memory
+  M2: semantic_memory
+  M3: autobiographical_memory
+  M4: relationship_memory
+  M5: procedural_memory
+  M6: salience_affective_memory
+  M7: counterfactual_memory
+  weights_overwrite_forbidden: true
+
+casual_subsystem:
+  current_config_ref: configs/magi_casual_v0.1.yaml
+  current_total_params: 13789271040
+  outside_reasoning_weight_budget: true
+  role: language_realization_social_strategy
+
+promotion_gates:
+  to_400b:
+    - magi_35b_param_reconcile
+    - tokenizer_gate
+    - moe_stability_gate
+    - cluster_alltoall_gate
+    - checkpoint_reshard_gate
+  to_1t:
+    - magi_400b_loss_routing_eval
+    - expert_specialization_report
+    - serving_runtime_pressure_test
+  to_5_5gtbs:
+    - measured_subsystem_allocation
+    - recurrent_runtime_validated
+    - memory_world_self_contracts_validated

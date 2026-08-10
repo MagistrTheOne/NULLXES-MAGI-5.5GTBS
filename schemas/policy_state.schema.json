@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magi://schemas/policy_state.schema.json",
+  "title": "MAGI PolicyState v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["empathy", "founder", "research", "corporate", "chaos", "hr_detected", "version"],
+  "properties": {
+    "empathy": { "type": "number", "minimum": 0, "maximum": 1 },
+    "founder": { "type": "number", "minimum": 0, "maximum": 1 },
+    "research": { "type": "number", "minimum": 0, "maximum": 1 },
+    "corporate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "chaos": { "type": "number", "minimum": 0, "maximum": 8 },
+    "hr_detected": { "type": "boolean" },
+    "safety_constraints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "version": { "type": "string", "const": "v0.1" },
+    "smoothed": { "type": "boolean", "default": false }
+  }
+}

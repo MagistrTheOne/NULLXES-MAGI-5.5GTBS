@@ -1,0 +1,109 @@
+# Cluster profiles v0.1 for MAGI-5.5GTBS path
+# Estimates are architecture planning values, not measured throughput.
+
+hardware_classes:
+  H200_SXM:
+    hbm_gb_per_gpu: 141
+    gpus_per_node: 8
+    intra_node: NVLink4
+    default_precision: bf16_then_fp8
+    role: fallback_and_burnin
+  B300_SXM:
+    hbm_gb_per_gpu: 288
+    hbm_gb_per_node: 2304
+    gpus_per_node: 8
+    intra_node: NVLink5_NVSwitch5
+    east_west_nic_per_gpu_gbps: 800
+    default_precision: fp8_mxfp8_after_bf16_match
+    role: production_pretrain
+
+training_profiles:
+  MAGI_35B_MoE_A8B_B300:
+    model_config: configs/magi_35b_moe_v0.1.yaml
+    gpu: B300_SXM
+    min_nodes: 8
+    min_gpus: 64
+    recommended_nodes: 16
+    recommended_gpus: 128
+    tp: 2
+    pp: 4
+    ep: 8
+    cp: 1
+    dp: remainder
+    precision: fp8_mxfp8
+    purpose: first_trainable_gate
+  MAGI_35B_MoE_A8B_H200_FALLBACK:
+    model_config: configs/magi_35b_moe_v0.1.yaml
+    gpu: H200_SXM
+    min_nodes: 16
+    min_gpus: 128
+    tp: 4
+    pp: 4
+    ep: 8
+    cp: 1
+    dp: remainder
+    precision: bf16_then_fp8
+    purpose: fallback_burnin
+  MAGI_400B_B300_CONSERVATIVE:
+    model_config: configs/magi_400b_v0.1.yaml
+    gpu: B300_SXM
+    min_nodes: 128
+    min_gpus: 1024
+    tp: 4
+    pp: 8
+    ep: 16
+    cp: 2
+    dp: 1
+    precision: fp8_mxfp8
+    purpose: conservative_dp1_pretrain_gate
+  MAGI_400B_B300_SERIOUS:
+    model_config: configs/magi_400b_v0.1.yaml
+    gpu: B300_SXM
+    min_nodes: 256
+    min_gpus: 2048
+    tp: 4
+    pp: 8
+    ep: 16
+    cp: 2
+    dp: 2
+    precision: fp8_mxfp8
+    purpose: serious_baseline_run
+
+serving_profiles:
+  MAGI_400B_VLLM_EP:
+    engine: vllm
+    flags:
+      - --enable-expert-parallel
+      - --kv-cache-dtype=fp8
+    parallelism:
+      tensor_parallel: tuned
+      data_parallel_attention: true
+      expert_parallel: true
+    purpose: broad_compatibility
+  MAGI_400B_SGLANG_EP:
+    engine: sglang
+    flags:
+      - --enable-moe-ep
+    features:
+      - radix_attention
+      - prefill_decode_disaggregation
+    purpose: multi_turn_prefix_heavy_runtime
+
+storage:
+  checkpoint_format: torch_dist
+  checkpoint_policy: async_distributed
+  rolling_checkpoints: 3
+  eval_milestones: 1
+  tiers:
+    nvme_burst: required
+    parallel_fs: required
+    object_archive: required
+
+burnin_gates:
+  - node_health
+  - nccl_allreduce
+  - nccl_alltoall
+  - moe_dispatch
+  - checkpoint_save_load
+  - checkpoint_reshard
+  - bad_node_quarantine

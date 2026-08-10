@@ -1,0 +1,60 @@
+# Training system profiles v0.1
+
+meta:
+  name: MAGI_TRAINING_PROFILES
+  version: v0.1
+  stack: Megatron-Core + Transformer Engine
+  no_local_training_in_this_phase: true
+
+common:
+  checkpoint_format: torch_dist
+  optimizer: AdamW
+  beta1: 0.9
+  beta2: 0.95
+  epsilon: 1.0e-8
+  weight_decay: 0.1
+  loss_dtype: fp32
+  router_dtype: fp32
+  softmax_dtype: fp32
+  sequence_parallel_required_with_tp_ep: true
+  metrics:
+    - loss
+    - grad_norm
+    - mfu
+    - tokens_per_second
+    - router_entropy
+    - expert_utilization
+    - tokens_per_expert
+    - all_to_all_ms
+    - checkpoint_save_s
+    - dataloader_wait_ms
+
+megatron_moe_features:
+  grouped_gemm: true
+  router_fusion: true
+  permute_fusion: true
+  moe_router_padding_for_fp8: true
+  shared_expert_overlap: true
+  parallel_folding: true
+  distributed_optimizer: true
+  megatron_fsdp_ep: candidate_after_baseline
+
+profiles:
+  magi_35b_b300:
+    model_config: configs/magi_35b_moe_v0.1.yaml
+    cluster_profile: MAGI_35B_MoE_A8B_B300
+    precision: mxfp8_after_bf16_match
+    warmup_steps_pct: 0.02
+    recompute: selective
+  magi_400b_b300:
+    model_config: configs/magi_400b_v0.1.yaml
+    cluster_profile: MAGI_400B_B300_CONSERVATIVE
+    precision: mxfp8_after_bf16_match
+    warmup_steps_pct: 0.02
+    recompute: selective_plus_moe_layer
+
+stop_rules:
+  sustained_nan: stop
+  expert_collapse: stop_and_rebalance
+  checkpoint_failure: stop
+  alltoall_regression: stop_for_topology_debug

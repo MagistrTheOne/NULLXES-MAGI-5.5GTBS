@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magi://schemas/casual_training_record.schema.json",
+  "title": "MAGI CASUAL Training Record v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "conversation_context",
+    "semantic_intent",
+    "reasoning_summary",
+    "relationship_state",
+    "policy_state",
+    "target_strategy",
+    "target_register",
+    "target_response",
+    "dataset_category",
+    "version"
+  ],
+  "properties": {
+    "id": { "type": "string" },
+    "conversation_context": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "type": "string", "enum": ["user", "magi", "system_internal"] },
+          "content": { "type": "string" }
+        }
+      }
+    },
+    "semantic_intent": { "type": "string" },
+    "reasoning_summary": { "type": "string" },
+    "relationship_state": { "$ref": "relationship_state.schema.json" },
+    "policy_state": { "$ref": "policy_state.schema.json" },
+    "target_strategy": { "type": "string" },
+    "target_register": { "type": "string" },
+    "target_response": { "type": "string" },
+    "pragmatic_labels": {
+      "type": "object",
+      "properties": {
+        "irony": { "type": "number", "minimum": 0, "maximum": 1 },
+        "sarcasm": { "type": "number", "minimum": 0, "maximum": 1 },
+        "absurdity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "profanity_intensity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "disagreement": { "type": "number", "minimum": 0, "maximum": 1 },
+        "speech_act": {
+          "type": "string",
+          "enum": [
+            "acknowledgement", "question", "answer", "challenge", "correction",
+            "joke", "teasing", "irony", "disagreement", "refusal", "silence",
+            "topic_continuation", "callback", "deadpan"
+          ]
+        },
+        "literal_polarity": { "type": "string", "enum": ["pos", "neg", "neu"] },
+        "intended_polarity": { "type": "string", "enum": ["pos", "neg", "neu"] }
+      }
+    },
+    "contrastive_group_id": { "type": ["string", "null"] },
+    "dataset_category": { "type": "string" },
+    "language": { "type": "string", "enum": ["ru", "en", "ru_en", "other"] },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "source_id": { "type": "string" },
+        "license": { "type": "string" },
+        "license_known": { "type": "boolean" }
+      }
+    },
+    "version": { "type": "string", "const": "v0.1" }
+  }
+}

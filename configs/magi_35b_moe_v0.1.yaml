@@ -1,0 +1,86 @@
+# MAGI-35B-MoE-A8B v0.1 — first real trainable gate for MAGI-5.5GTBS
+# No 1B/7B model ladder. Small fixtures are kernel smoke only.
+# All numeric architecture constants originate here.
+
+meta:
+  name: MAGI-35B-MoE-A8B
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  status: first_trainable_gate
+  from_zero: true
+  model_class: moe_decoder
+  claim_class_topology: CALCULATED
+
+architecture:
+  type: decoder_only_prenorm_sparse_moe
+  d_model: 6144
+  n_layers: 48
+  n_dense_layers: 4
+  n_moe_layers: 44
+  n_heads: 48
+  n_kv_heads: 8
+  d_head: 128
+  d_ff_dense: 16384
+  d_ff_expert: 512
+  n_routed_experts: 64
+  n_shared_experts: 1
+  top_k: 4
+  vocab_size: 131072
+  tied_embeddings: false
+  norm: rmsnorm
+  rmsnorm_eps: 1.0e-6
+  activation: swiglu
+  positional: rope
+  rope_theta: 1000000.0
+  bias: false
+  attention: gqa
+  train_context: 32768
+  infer_context: 65536
+
+moe:
+  gate: sigmoid_normalize_topk
+  gate_dtype: fp32
+  capacity_factor_train_min: 1.0
+  capacity_factor_train_max: 1.25
+  load_balance: aux_loss_free_bias
+  router_z_loss_coeff: 1.0e-5
+  hierarchical_routing_hooks: true
+
+init:
+  emb_std: 0.02
+  residual_std_formula: "0.02 / sqrt(2 * n_layers)"
+  claim_class: HYPOTHESIS
+
+precision:
+  proxy: bf16
+  production: fp8_te
+  master_weights: fp32
+  router_loss_softmax: fp32
+
+hardware:
+  preferred_gpu: B300
+  fallback_gpu: H200
+  gpus_per_node: 8
+
+parallelism_template_b300:
+  claim_class: ESTIMATED
+  tp: 2
+  pp: 4
+  ep: 8
+  cp: 1
+  dp: remainder
+
+parallelism_template_h200:
+  claim_class: ESTIMATED
+  tp: 4
+  pp: 4
+  ep: 8
+  cp: 1
+  dp: remainder
+
+expected_param_count:
+  total: 34054674432
+  active_per_token: 8335202304
+  cognitive_cycle_1pass: 8335202304
+  cognitive_cycle_2pass: 16670404608
+  claim_class: CALCULATED

@@ -1,0 +1,38 @@
+# Observability and gate thresholds v0.1
+
+meta:
+  name: MAGI_GATE_THRESHOLDS
+  version: v0.1
+  thresholds_are_initial: true
+
+param_reconcile:
+  exact_match_required: true
+
+tokenizer:
+  unknown_rate_max: 0.001
+  ru_informal_fertility_regression_max: 0.08
+  code_fragmentation_regression_max: 0.10
+
+cluster:
+  nccl_allreduce_required: true
+  nccl_alltoall_required: true
+  bad_node_quarantine_required: true
+
+training:
+  sustained_nan_steps_max: 0
+  dead_expert_fraction_max: 0.10
+  expert_collapse_top_expert_token_fraction_max: 0.40
+  checkpoint_save_load_required: true
+  checkpoint_reshard_required: true
+  dataloader_starvation_action: stop
+
+casual:
+  semantic_retention_required: true
+  anti_sycophancy_required: true
+  profanity_collapse_forbidden: true
+  hr_over_chaos_required: true
+
+serving:
+  kv_oom_allowed: false
+  prefill_decode_transfer_required: true
+  fallback_mode_required: true

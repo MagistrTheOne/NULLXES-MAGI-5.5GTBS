@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magi://schemas/realization_request.schema.json",
+  "title": "MAGI CASUAL RealizationRequest v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "request_id",
+    "semantic_intent",
+    "reasoning_summary",
+    "policy_state",
+    "relationship_state",
+    "conversation_state",
+    "version"
+  ],
+  "properties": {
+    "request_id": { "type": "string" },
+    "semantic_intent": { "type": "string" },
+    "reasoning_summary": { "type": "string" },
+    "facts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "numbers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": ["number", "string"] }
+        }
+      },
+      "default": []
+    },
+    "uncertainty": {
+      "type": "string",
+      "enum": ["none", "low", "medium", "high"],
+      "default": "none"
+    },
+    "policy_state": { "$ref": "policy_state.schema.json" },
+    "relationship_state": { "$ref": "relationship_state.schema.json" },
+    "conversation_state": {
+      "type": "object",
+      "required": ["turn_index"],
+      "properties": {
+        "turn_index": { "type": "integer", "minimum": 0 },
+        "register_prev": { "type": ["string", "null"] },
+        "callbacks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "language": { "type": "string", "enum": ["ru", "en", "ru_en"] }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "properties": {
+        "grammatical_gender": {
+          "type": "string",
+          "enum": ["masculine", "feminine", "androgynous", "neutral", "undefined"],
+          "default": "undefined"
+        }
+      }
+    },
+    "dev_debug": { "type": "boolean", "default": false },
+    "version": { "type": "string", "const": "v0.1" }
+  }
+}

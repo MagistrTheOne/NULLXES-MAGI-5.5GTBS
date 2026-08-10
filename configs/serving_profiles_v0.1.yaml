@@ -1,0 +1,50 @@
+# Inference serving profiles v0.1
+
+meta:
+  name: MAGI_SERVING_PROFILES
+  version: v0.1
+  no_external_llm_api: true
+
+engines:
+  vllm:
+    role: broad_compatibility_default
+    required_features:
+      - expert_parallel
+      - tensor_parallel
+      - data_parallel_attention
+      - fp8_kv_cache
+      - prefill_decode_disaggregation
+  sglang:
+    role: prefix_heavy_multi_turn_candidate
+    required_features:
+      - moe_expert_parallel
+      - radix_attention
+      - prefill_decode_disaggregation
+      - structured_outputs
+
+profiles:
+  magi_35b_interactive:
+    model_config: configs/magi_35b_moe_v0.1.yaml
+    primary_engine: vllm
+    fallback_engine: sglang
+    min_gpus_b300: 8
+    kv_cache_dtype: fp8
+    expert_parallel: true
+  magi_400b_interactive:
+    model_config: configs/magi_400b_v0.1.yaml
+    primary_engine: vllm
+    fallback_engine: sglang
+    min_gpus_b300: 64
+    recommended_gpus_b300: 128
+    kv_cache_dtype: fp8
+    expert_parallel: true
+    data_parallel_attention: true
+  casual_pool:
+    model_config: configs/magi_casual_v0.1.yaml
+    primary_engine: vllm
+    min_gpus_b300: 1
+    recommended_gpus_b300: 8
+
+kv_cache_formula:
+  bytes: "2 * n_layers * n_kv_heads * d_head * sequence_length * batch * bytes_per_element"
+  note: "GQA KV cache scales with n_kv_heads, not n_heads."

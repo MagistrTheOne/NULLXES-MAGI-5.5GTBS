@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magi://schemas/dataset_manifest.schema.json",
+  "title": "MAGI Dataset Manifest v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "dataset_id",
+    "version",
+    "source_type",
+    "license_status",
+    "domains",
+    "language_distribution",
+    "provenance",
+    "hashes"
+  ],
+  "properties": {
+    "dataset_id": { "type": "string" },
+    "version": { "type": "string" },
+    "source_type": {
+      "type": "string",
+      "enum": ["raw_external", "nullxes_owned", "nullxes_synthetic", "licensed_partner", "quarantine"]
+    },
+    "license_status": {
+      "type": "string",
+      "enum": ["approved", "unknown", "rejected", "quarantine"]
+    },
+    "license_reference": { "type": ["string", "null"] },
+    "domains": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "language_distribution": {
+      "type": "object",
+      "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["owner", "capture_method", "captured_at"],
+      "properties": {
+        "owner": { "type": "string" },
+        "capture_method": { "type": "string" },
+        "captured_at": { "type": "string" },
+        "source_uri": { "type": ["string", "null"] }
+      }
+    },
+    "synthetic": {
+      "type": "object",
+      "properties": {
+        "is_synthetic": { "type": "boolean" },
+        "generator_id": { "type": ["string", "null"] },
+        "semantic_pins_required": { "type": "boolean" }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "required": ["raw_manifest_hash"],
+      "properties": {
+        "raw_manifest_hash": { "type": "string" },
+        "normalized_hash": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

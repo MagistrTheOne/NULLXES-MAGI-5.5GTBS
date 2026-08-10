@@ -1,0 +1,64 @@
+# Tokenizer experiment matrix v0.1
+
+meta:
+  name: MAGI_TOKENIZER_EXPERIMENTS
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  default_vocab_size: 131072
+  from_nullxes_corpus_only: true
+
+candidates:
+  bpe_131k:
+    algorithm: BPE
+    vocab_size: 131072
+    byte_fallback: true
+    normalization: NFKC
+  unigram_131k:
+    algorithm: Unigram
+    vocab_size: 131072
+    byte_fallback: true
+    normalization: NFKC
+  byte_hybrid_131k:
+    algorithm: byte_level_hybrid
+    vocab_size: 131072
+    byte_fallback: true
+    normalization: NFKC
+
+holdout_slices:
+  - ru_formal
+  - ru_informal
+  - ru_slang
+  - en_formal
+  - en_informal
+  - code_python
+  - code_typescript
+  - math_latex
+  - scientific_text
+  - profanity_in_context
+  - emoji_punctuation
+  - ru_en_code_switching
+
+metrics:
+  - tokens_per_character
+  - tokens_per_word
+  - compression_ratio
+  - code_fragmentation
+  - russian_morphology_fragmentation
+  - english_fragmentation
+  - math_notation_behavior
+  - rare_symbol_behavior
+  - unknown_rate
+  - profanity_fragmentation
+  - code_switch_fertility
+
+rejection_gates:
+  unknown_rate_max: 0.001
+  ru_informal_fertility_regression_max: 0.08
+  code_fragmentation_regression_max: 0.10
+  math_symbol_breakage_allowed: false
+  byte_fallback_required: true
+
+artifacts:
+  tokenizer_model: tokenizer/artifacts/magi_tokenizer_v0.1.model
+  tokenizer_json: tokenizer/artifacts/magi_tokenizer_v0.1.json
+  report: tokenizer/reports/tokenizer_eval_v0.1.md

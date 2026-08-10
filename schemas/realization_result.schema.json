@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magi://schemas/realization_result.schema.json",
+  "title": "MAGI CASUAL RealizationResult v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "text", "selected_register", "critic_pass", "version"],
+  "properties": {
+    "request_id": { "type": "string" },
+    "text": { "type": "string" },
+    "selected_register": { "type": "string" },
+    "speech_act": { "type": "string" },
+    "critic_pass": { "type": "boolean" },
+    "regen_count": { "type": "integer", "minimum": 0, "maximum": 2 },
+    "debug": {
+      "type": "object",
+      "description": "Dev-only telemetry; must not appear in normal user output",
+      "properties": {
+        "semantic_preservation": { "type": "number" },
+        "irony": { "type": "number" },
+        "sarcasm": { "type": "number" },
+        "chaos_influence": { "type": "number" },
+        "relationship_confidence": { "type": "number" },
+        "profanity_rate": { "type": "number" },
+        "policy_snapshot": { "type": "object" }
+      }
+    },
+    "version": { "type": "string", "const": "v0.1" }
+  }
+}

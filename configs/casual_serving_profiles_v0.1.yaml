@@ -1,0 +1,46 @@
+# CASUAL serving profiles v0.1
+
+meta:
+  name: MAGI_CASUAL_SERVING
+  version: v0.1
+  model_config: configs/magi_casual_v0.1.yaml
+  role: realization_subsystem
+  not_primary_reasoner: true
+
+profiles:
+  casual_single_b300:
+    gpu: B300
+    min_gpus: 1
+    precision: bf16_or_fp8
+    use_case: low_concurrency_integration
+  casual_tp2_b300:
+    gpu: B300
+    min_gpus: 2
+    precision: bf16_or_fp8
+    use_case: latency_margin
+  casual_pool_8xb300:
+    gpu: B300
+    min_gpus: 8
+    precision: fp8_after_validation
+    use_case: production_pool
+
+runtime:
+  max_regen: 2
+  critic: shared_backbone_head
+  inputs:
+    - semantic_intent
+    - reasoning_summary
+    - policy_state
+    - relationship_state
+    - conversation_state
+  outputs:
+    - realization_result
+    - dev_debug_metadata_optional
+
+promotion_to_casual_30b_or_moe:
+  allowed_only_if:
+    - casual_13b_fails_semantic_retention
+    - casual_13b_fails_ru_naturalness
+    - casual_13b_fails_register_control
+    - casual_13b_fails_policy_adherence
+  default: keep_dense_13_789b

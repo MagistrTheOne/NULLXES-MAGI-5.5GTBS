@@ -1,0 +1,81 @@
+# MAGI-400B v0.1 — baseline monster node of MAGI-5.5GTBS
+# All numeric architecture constants for MAGI-400B originate here.
+# param_count.py validates TOTAL / ACTIVE.
+
+meta:
+  name: MAGI-400B
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  status: baseline_monster
+  from_zero: true
+  model_class: moe_decoder
+  claim_class_topology: CALCULATED
+
+architecture:
+  type: decoder_only_prenorm_sparse_moe
+  d_model: 8192
+  n_layers: 64
+  n_dense_layers: 4
+  n_moe_layers: 60
+  n_heads: 64
+  n_kv_heads: 8
+  d_head: 128
+  d_ff_dense: 22016
+  d_ff_expert: 2048
+  n_routed_experts: 128
+  n_shared_experts: 2
+  top_k: 8
+  vocab_size: 131072
+  tied_embeddings: false
+  norm: rmsnorm
+  rmsnorm_eps: 1.0e-6
+  activation: swiglu
+  positional: rope_hybrid_local_global
+  rope_theta: 1000000.0
+  bias: false
+  attention: gqa
+  hybrid_local_global_ratio: "3:1"
+  local_window: 4096
+  train_context: 32768
+  infer_context: 131072
+
+moe:
+  gate: sigmoid_normalize_topk
+  gate_dtype: fp32
+  capacity_factor_train_min: 1.0
+  capacity_factor_train_max: 1.25
+  load_balance: aux_loss_free_bias
+  router_z_loss_coeff: 1.0e-5
+  hierarchical_routing_hooks: true
+
+init:
+  emb_std: 0.02
+  residual_std_formula: "0.02 / sqrt(2 * n_layers)"
+  claim_class: HYPOTHESIS
+
+precision:
+  proxy: bf16
+  production: fp8_te
+  master_weights: fp32
+  router_loss_softmax: fp32
+
+hardware:
+  proxy_gpu: H200
+  production_gpu: B300
+  gpus_per_node: 8
+
+parallelism_template_b300:
+  claim_class: ESTIMATED
+  tp: 4
+  pp: 8
+  ep: 16
+  cp: 2
+  dp: remainder
+
+expected_param_count:
+  # Validated by scripts/param_count.py — CALCULATED
+  total: 406626246656
+  active_per_token: 43164639232
+  cognitive_cycle_1pass: 43164639232
+  cognitive_cycle_2pass: 86329278464
+  claim_class: CALCULATED

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magi://schemas/relationship_state.schema.json",
+  "title": "MAGI RelationshipState v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "relationship_role",
+    "familiarity",
+    "trust",
+    "formality",
+    "humour_tolerance",
+    "confrontation_tolerance",
+    "version"
+  ],
+  "properties": {
+    "relationship_role": {
+      "type": "string",
+      "enum": ["unknown", "user", "founder", "colleague", "adversary", "other"]
+    },
+    "familiarity": { "type": "number", "minimum": 0, "maximum": 1 },
+    "trust": { "type": "number", "minimum": 0, "maximum": 1 },
+    "shared_history": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "preferred_register": {
+      "type": "string",
+      "enum": [
+        "formal", "informal", "technical", "minimal", "warm", "cold",
+        "ironic", "sarcastic", "absurd", "kafkaesque", "playful",
+        "skeptical", "confrontational", "profane", "deadpan",
+        "corporate", "research", "familiar", "detached"
+      ]
+    },
+    "humour_tolerance": { "type": "number", "minimum": 0, "maximum": 1 },
+    "confrontation_tolerance": { "type": "number", "minimum": 0, "maximum": 1 },
+    "formality": { "type": "number", "minimum": 0, "maximum": 1 },
+    "callback_density": { "type": "number", "minimum": 0, "maximum": 1 },
+    "interaction_history_ref": { "type": ["string", "null"], "default": null },
+    "address_form": {
+      "type": "string",
+      "enum": ["ty", "vy", "neutral", "undefined"],
+      "default": "neutral"
+    },
+    "version": { "type": "string", "const": "v0.1" }
+  }
+}

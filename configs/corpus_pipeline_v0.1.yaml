@@ -1,0 +1,68 @@
+# Corpus pipeline architecture v0.1
+
+meta:
+  name: MAGI_CORPUS_PIPELINE
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  dataset_content_defined_later_by_author: true
+
+pipeline:
+  stages:
+    - raw_ingest
+    - provenance_capture
+    - legal_license_filter
+    - parser
+    - normalizer
+    - language_detection
+    - quality_scoring
+    - exact_dedup
+    - fuzzy_dedup
+    - contamination_filter
+    - privacy_filter
+    - safety_filter
+    - domain_classifier
+    - curriculum_weighting
+    - tokenizer
+    - sequence_packing
+    - shard_writer
+    - manifest_writer
+
+synthetic_interface:
+  accepted: true
+  requires_generator_manifest: true
+  requires_semantic_pins: true
+  requires_license_class: NULLXES_SYNTHETIC
+  no_external_llm_runtime_dependency: true
+
+domains:
+  - general_language
+  - science
+  - mathematics
+  - engineering
+  - programming
+  - systems
+  - robotics
+  - economics
+  - law
+  - history
+  - philosophy
+  - dialogue
+  - reasoning
+  - structured_data
+  - multilingual
+  - casual_dialogue
+  - policy_conditioned_dialogue
+
+shards:
+  format: token_packed_binary_with_json_manifest
+  document_boundaries_preserved: preferred
+  config_hash_required: true
+  tokenizer_hash_required: true
+  lineage_required: true
+
+quality_gates:
+  license_unknown_action: quarantine
+  exact_dedup_required: true
+  fuzzy_dedup_required: true
+  contamination_filter_required: true
+  pii_filter_required: true

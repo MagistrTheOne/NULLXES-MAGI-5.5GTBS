@@ -1,0 +1,89 @@
+# MAGI CASUAL LLM v0.1 — language realization / social strategy subsystem
+# Source of truth for CASUAL numeric constants. Validated by param_count.py.
+
+meta:
+  name: MAGI-CASUAL
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  reasoning_core_ref: configs/magi_400b_v0.1.yaml
+  status: realization_subsystem
+  from_zero: true
+  model_class: dense_decoder
+  primary_role: language_realization
+  not_primary_reasoner: true
+
+architecture:
+  type: decoder_only_prenorm_dense
+  d_model: 5120
+  n_layers: 48
+  n_heads: 40
+  n_kv_heads: 8
+  d_head: 128
+  d_ff: 13696
+  vocab_size: 131072
+  tied_embeddings: true
+  norm: rmsnorm
+  rmsnorm_eps: 1.0e-6
+  activation: swiglu
+  positional: rope
+  rope_theta: 1000000.0
+  bias: false
+  attention: gqa
+  dropout: 0.0
+  train_context: 8192
+  infer_context: 32768
+  moe: false
+
+init:
+  emb_std: 0.02
+  residual_std_formula: "0.02 / sqrt(2 * n_layers)"
+  claim_class: HYPOTHESIS
+
+conditioning:
+  architecture: single_backbone_structured_prefix_control_heads
+  critic: shared_backbone_critic_head
+  max_regen: 2
+  output_critic_enabled: true
+
+size_decision:
+  production: 13B_class
+  claim_class: HYPOTHESIS
+  validation_models: [1B, 3B, 7B]
+  falsify_ceiling: 30B
+  rejected_v0_1: [50B_plus, casual_moe]
+
+tokenizer:
+  mode: shared_magi
+  vocab_size: 131072
+  sanitize_informal: false
+
+opener_register_bank:
+  magi_opener_familiar_ru: "Здрасьте, я MAGI, чем-то тебе могу быть полезен мой кожанный мешок?"
+  note: "Register-selected, not global servant default."
+
+precision:
+  proxy: bf16
+  production: bf16_or_fp8_te
+  loss_heads: fp32
+
+hardware:
+  proxy_gpu: H200
+  production_gpu: B300
+
+loss_lambda_seeds_estimated:
+  claim_class: ESTIMATED
+  language: 1.0
+  semantic: 0.5
+  policy: 0.2
+  register: 0.2
+  relationship: 0.2
+  consistency: 0.3
+  contrastive: 0.3
+  style: 0.1
+  safety: 1.0
+
+expected_param_count:
+  # Validated by scripts/param_count.py — CALCULATED
+  total: 13789271040
+  active_per_token: 13789271040
+  claim_class: CALCULATED

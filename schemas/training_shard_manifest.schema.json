@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "magi://schemas/training_shard_manifest.schema.json",
+  "title": "MAGI Training Shard Manifest v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "shard_id",
+    "version",
+    "tokenizer_id",
+    "tokenizer_hash",
+    "sequence_length",
+    "token_count",
+    "document_count",
+    "dataset_lineage",
+    "shard_hash",
+    "created_at"
+  ],
+  "properties": {
+    "shard_id": { "type": "string" },
+    "version": { "type": "string" },
+    "split": { "type": "string", "enum": ["train", "validation", "test", "quarantine"] },
+    "tokenizer_id": { "type": "string" },
+    "tokenizer_hash": { "type": "string" },
+    "sequence_length": { "type": "integer", "minimum": 1 },
+    "token_count": { "type": "integer", "minimum": 1 },
+    "document_count": { "type": "integer", "minimum": 1 },
+    "dataset_lineage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dataset_id", "weight", "license_status"],
+        "properties": {
+          "dataset_id": { "type": "string" },
+          "weight": { "type": "number", "minimum": 0 },
+          "license_status": { "type": "string" }
+        }
+      }
+    },
+    "packing": {
+      "type": "object",
+      "properties": {
+        "document_boundaries_preserved": { "type": "boolean" },
+        "eos_between_documents": { "type": "boolean" },
+        "pad_policy": { "type": "string" }
+      }
+    },
+    "quality_summary": {
+      "type": "object",
+      "additionalProperties": { "type": ["number", "string", "boolean"] }
+    },
+    "shard_hash": { "type": "string" },
+    "config_hash": { "type": "string" },
+    "created_at": { "type": "string" }
+  }
+}
