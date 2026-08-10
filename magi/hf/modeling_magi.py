@@ -243,7 +243,8 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
             raise TypeError("Untied MAGI output embeddings must be an nn.Linear")
         self.model.lm_head = new_embeddings
 
-    def tie_weights(self) -> None:
+    def tie_weights(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
         if self.config.tied_embeddings:
             self.model.lm_head = None
             self.config.tie_word_embeddings = True
