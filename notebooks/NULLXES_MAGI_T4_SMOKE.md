@@ -5,16 +5,20 @@ Tesla T4 (~15GB). Config: `configs/magi_t4_smoke_v0.1.yaml`.
 ## Cell 1 — setup
 
 ```python
-!pip -q install torch transformers safetensors
-!git clone https://github.com/MagistrTheOne/NULLXES-MAGI-5.5GTBS.git
-%cd NULLXES-MAGI-5.5GTBS
+# Do not upgrade Colab torch/CUDA stack; only add HF deps.
+!pip -q install "transformers>=4.57,<6" safetensors
+!git clone https://github.com/MagistrTheOne/NULLXES-MAGI-5.5GTBS.git || true
+%cd /content/NULLXES-MAGI-5.5GTBS
+!git fetch origin && git checkout main && git pull --ff-only origin main
 ```
 
 ## Cell 2 — validate config + tokenizer + GPU run
 
 ```python
+!python -c "import transformers; from magi.hf import MagiForCausalLM, HF_AVAILABLE, HF_IMPORT_ERROR; print(transformers.__version__, HF_AVAILABLE, MagiForCausalLM, HF_IMPORT_ERROR)"
 !python scripts/validate_config.py --config configs/magi_t4_smoke_v0.1.yaml
 !python scripts/param_count.py --config configs/magi_t4_smoke_v0.1.yaml
+!python scripts/validate_all_models.py
 !python scripts/t4_smoke_run.py --device cuda --seq 256 --generate-tokens 16
 ```
 

@@ -28,10 +28,16 @@ except ImportError:  # checkpoint remote-code layout (flat module names)
 from magi.model import MAGITransformer
 
 try:
-    from transformers import GenerationMixin, PreTrainedModel
+    from transformers import PreTrainedModel
     from transformers.modeling_outputs import CausalLMOutputWithPast
 except ImportError as exc:  # pragma: no cover - exercised only without optional dependency
     raise ImportError("magi.hf.modeling_magi requires the optional transformers package") from exc
+
+try:
+    # transformers<=4 exposes GenerationMixin at package root.
+    from transformers import GenerationMixin
+except ImportError:  # transformers>=5: root export removed
+    from transformers.generation import GenerationMixin
 
 
 class _TiedLMHead(nn.Module):

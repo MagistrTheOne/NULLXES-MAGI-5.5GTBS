@@ -70,8 +70,11 @@ def main() -> int:
         return 0
 
     import torch
-    from magi.hf import MagiForCausalLM, native_config_to_hf
+    from magi.hf import HF_AVAILABLE, HF_IMPORT_ERROR, MagiForCausalLM, native_config_to_hf
     from magi.model import MAGITransformer
+
+    if not HF_AVAILABLE or MagiForCausalLM is None:
+        raise SystemExit(f"magi.hf unavailable: {HF_IMPORT_ERROR!r}")
 
     device = torch.device(args.device)
     if device.type == "cuda" and not torch.cuda.is_available():
