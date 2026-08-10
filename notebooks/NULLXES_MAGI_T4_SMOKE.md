@@ -2,30 +2,38 @@
 
 Tesla T4 (~15GB). Config: `configs/magi_t4_smoke_v0.1.yaml`.
 
-## Cell 1 — setup (pin transformers 4.57.1)
+## Preferred: Factory reset runtime
 
-Do **not** `pip install -U torch` on Colab. transformers 5.x needs torch>=2.5 and breaks GenerationMixin when the torch backend is disabled.
+Runtime → Disconnect and delete runtime → Connect (GPU T4).  
+Do **not** `pip install -U torch`.
+
+## Cell 1 — deps + align torchvision + restart
+
+If the runtime was previously polluted by `pip install -U torch`, torchvision breaks with:
+`RuntimeError: operator torchvision::nms does not exist`.
 
 ```python
+# Keep current torch 2.13+cu130; install matching torchvision. Do not -U torch again.
 !pip -q install "transformers==4.57.1" safetensors
+!pip -q install --force-reinstall "torchvision==0.28.0" --index-url https://download.pytorch.org/whl/cu130
 import os
-os.kill(os.getpid(), 9)  # hard-restart runtime so the new transformers is loaded
+os.kill(os.getpid(), 9)
 ```
 
-## Cell 2 — pull repo + run
-
-Re-run after the runtime restart from Cell 1.
+## Cell 2 — pull + smoke
 
 ```python
 !git clone https://github.com/MagistrTheOne/NULLXES-MAGI-5.5GTBS.git || true
 %cd /content/NULLXES-MAGI-5.5GTBS
 !git fetch origin && git checkout main && git pull --ff-only origin main
-!python -c "import torch, transformers; from magi.hf import MagiForCausalLM, HF_AVAILABLE, HF_IMPORT_ERROR, format_hf_import_error; print('torch', torch.__version__); print('tf', transformers.__version__); print('hf', HF_AVAILABLE, MagiForCausalLM); print('err', format_hf_import_error() if HF_IMPORT_ERROR else None)"
+!python -c "import torch, torchvision, transformers; from magi.hf import MagiForCausalLM, HF_AVAILABLE, HF_IMPORT_ERROR, format_hf_import_error; print('torch', torch.__version__); print('tv', torchvision.__version__); print('tf', transformers.__version__); print('hf', HF_AVAILABLE, MagiForCausalLM); print('err', format_hf_import_error() if HF_IMPORT_ERROR else None)"
 !python scripts/validate_config.py --config configs/magi_t4_smoke_v0.1.yaml
 !python scripts/param_count.py --config configs/magi_t4_smoke_v0.1.yaml
 !python scripts/validate_all_models.py
 !python scripts/t4_smoke_run.py --device cuda --seq 256 --generate-tokens 16
 ```
+
+Expected check line: `hf True <class 'magi.hf.modeling_magi.MagiForCausalLM'>`.
 
 ## Cell 3 — quick HF path
 
