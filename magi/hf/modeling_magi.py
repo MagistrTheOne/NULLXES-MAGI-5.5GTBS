@@ -56,7 +56,19 @@ def _past_length(past_key_values: Any) -> int:
         return int(past_key_values.get_seq_length())
     if len(past_key_values) == 0:
         return 0
-    return int(past_key_values[0][0].shape[-2])
+    first = past_key_values[0]
+    if first is None or first[0] is None:
+        return 0
+    return int(first[0].shape[-2])
+
+
+def _is_cache_object(past_key_values: Any) -> bool:
+    return past_key_values is not None and (
+        hasattr(past_key_values, "to_legacy_cache")
+        or hasattr(past_key_values, "update")
+        or hasattr(past_key_values, "layers")
+        or hasattr(past_key_values, "key_cache")
+    )
 
 
 def _to_legacy_past(past_key_values: Any) -> Any:
@@ -69,17 +81,46 @@ def _to_legacy_past(past_key_values: Any) -> Any:
         if not legacy or legacy[0] is None or legacy[0][0] is None:
             return None
         return legacy
-    if not past_key_values or past_key_values[0][0] is None:
+    # transformers>=5 DynamicCache: layers[i].keys / .values
+    layers = getattr(past_key_values, "layers", None)
+    if layers is not None:
+        legacy = []
+        for layer in layers:
+            keys = getattr(layer, "keys", None)
+            values = getattr(layer, "values", None)
+            if keys is None or values is None:
+                return None
+            legacy.append((keys, values))
+        return tuple(legacy) if legacy else None
+    # Older DynamicCache: key_cache / value_cache lists
+    key_cache = getattr(past_key_values, "key_cache", None)
+    value_cache = getattr(past_key_values, "value_cache", None)
+    if key_cache is not None and value_cache is not None:
+        if not key_cache or key_cache[0] is None:
+            return None
+        return tuple((k, v) for k, v in zip(key_cache, value_cache))
+    if not past_key_values or past_key_values[0] is None or past_key_values[0][0] is None:
         return None
     return past_key_values
 
 
-def _to_dynamic_past(past_key_values: Any) -> Any:
+def _to_dynamic_past(past_key_values: Any, config: Any | None = None) -> Any:
     if past_key_values is None:
         return None
     from transformers import DynamicCache
 
-    return DynamicCache.from_legacy_cache(past_key_values)
+    if hasattr(DynamicCache, "from_legacy_cache"):
+        return DynamicCache.from_legacy_cache(past_key_values)
+
+    # transformers>=5 removed from_legacy_cache; rebuild via update().
+    try:
+        cache = DynamicCache(config=config) if config is not None else DynamicCache()
+    except TypeError:
+        cache = DynamicCache()
+    for layer_idx, layer_past in enumerate(past_key_values):
+        key_states, value_states = layer_past
+        cache.update(key_states, value_states, layer_idx)
+    return cache
 
 
 class MagiForCausalLM(PreTrainedModel, GenerationMixin):
@@ -116,14 +157,15 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
         if input_ids is None:
             raise ValueError("MagiForCausalLM.forward requires input_ids")
         del kwargs
-        return_dict = self.config.use_return_dict if return_dict is None else return_dict
+        if return_dict is None:
+            return_dict = bool(getattr(self.config, "return_dict", True))
         output_attentions = self.config.output_attentions if output_attentions is None else output_attentions
         output_hidden_states = (
             self.config.output_hidden_states if output_hidden_states is None else output_hidden_states
         )
         if use_cache is None:
             use_cache = False if self.training else bool(getattr(self.config, "use_cache", True))
-        want_dynamic = past_key_values is not None and hasattr(past_key_values, "to_legacy_cache")
+        want_dynamic = _is_cache_object(past_key_values) or self._supports_cache_class
         legacy_past = _to_legacy_past(past_key_values)
 
         native = self.model(
@@ -138,8 +180,8 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
         )
         logits = native.logits
         past_out = native.past_key_values
-        if use_cache and past_out is not None and (want_dynamic or self._supports_cache_class):
-            past_out = _to_dynamic_past(past_out)
+        if use_cache and past_out is not None and want_dynamic:
+            past_out = _to_dynamic_past(past_out, config=self.config)
         loss = None
         if labels is not None:
             shift_logits = logits[:, :-1, :].contiguous()
@@ -202,7 +244,7 @@ class MagiForCausalLM(PreTrainedModel, GenerationMixin):
                     for past_state in layer_past
                 )
             )
-        return _to_dynamic_past(tuple(reordered))
+        return _to_dynamic_past(tuple(reordered), config=self.config)
 
     def get_input_embeddings(self) -> nn.Embedding:
         return self.model.token_embedding
