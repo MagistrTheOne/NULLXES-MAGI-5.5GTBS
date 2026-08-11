@@ -16,6 +16,7 @@ REQUIRED_FILES = [
     "README.md",
     "configs/magi_35b_moe_v0.1.yaml",
     "configs/magi_t4_smoke_v0.1.yaml",
+    "configs/magi_7b_moe_v0.1.yaml",
     "configs/magi_7b_v0.1.yaml",
     "configs/magi_7b_train_h200_v0.1.yaml",
     "configs/tokenizer_t4_smoke_v0.1.yaml",

@@ -252,9 +252,11 @@ def main(argv: list[str] | None = None) -> int:
     paths: list[Path] = []
     if args.all:
         paths = [
+            root / "configs" / "magi_7b_moe_v0.1.yaml",
             root / "configs" / "magi_35b_moe_v0.1.yaml",
             root / "configs" / "magi_400b_v0.1.yaml",
             root / "configs" / "magi_casual_v0.1.yaml",
+            root / "configs" / "magi_7b_v0.1.yaml",
         ]
     elif args.config:
         paths = [args.config if args.config.is_absolute() else root / args.config]

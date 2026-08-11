@@ -97,6 +97,13 @@ def main() -> int:
 
     print("=== TRAIN SMOKE ===")
     print(f"model={cfg.name}")
+    print(f"model_class={cfg.model_class}")
+    print(f"is_moe={cfg.is_moe}")
+    if cfg.is_moe:
+        print(
+            f"moe=routed={cfg.n_routed_experts} shared={cfg.n_shared_experts} "
+            f"top_k={cfg.top_k} dense_layers={cfg.n_dense_layers} moe_layers={cfg.n_moe_layers}"
+        )
     print(f"device={device}")
     print(f"steps={steps} seq={seq_len} batch={batch_size} lr={lr}")
     print(f"checkpoint_dir={checkpoint_dir} every={checkpoint_every} save_optimizer={save_optimizer}")

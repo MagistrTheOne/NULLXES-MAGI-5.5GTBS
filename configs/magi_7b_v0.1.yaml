@@ -1,19 +1,21 @@
-# MAGI-7B v0.1 — H200 single-GPU intelligence bring-up
-# Dense decoder in the CASUAL family. Full AdamW fits 1x H200 141GB.
-# Not a substitute for MAGI-35B/400B ladder. Vocab 8192 pairs with T4 smoke tokenizer
-# for immediate trainability; production shared vocab remains 131072.
+# MAGI-7B dense baseline v0.1 — comparison baseline ONLY
+# NOT the H200 canonical research path. Canonical bring-up is configs/magi_7b_moe_v0.1.yaml.
+# ENGINEERING SCALING RULE: reducing params is allowed; changing architecture is not.
+# Dense models may exist only as explicit baselines.
 
 meta:
-  name: MAGI-7B
+  name: MAGI-7B-DENSE-BASELINE
   version: v0.1
   program_parent: MAGI-5.5GTBS
-  status: h200_intelligence_bringup
+  status: dense_baseline_only
   from_zero: true
   model_class: dense_decoder
-  primary_role: language_bringup
+  primary_role: dense_comparison_baseline
   parent_family: magi_casual
   tokenizer_ref: configs/tokenizer_t4_smoke_v0.1.yaml
   hf_architecture: MagiForCausalLM
+  canonical_research_path: false
+  notes: "Do not use as H200 MoE bring-up. Use configs/magi_7b_moe_v0.1.yaml."
 
 architecture:
   type: decoder_only_prenorm_dense
@@ -53,7 +55,7 @@ hardware:
   dtype: bfloat16
   recommended_batch: 1
   recommended_seq: 2048
-  notes: "bf16 weights + fp32 AdamW; seq 2048 batch 1 expected under ~100GB with activations"
+  notes: "Dense baseline only. Canonical H200 path is MAGI-7B-MoE."
 
 tokenizer:
   id: magi_t4_smoke_v0.1

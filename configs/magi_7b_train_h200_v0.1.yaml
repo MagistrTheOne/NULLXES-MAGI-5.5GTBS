@@ -1,9 +1,9 @@
-# H200 train profile for MAGI-7B intelligence bring-up
+# H200 train profile — MAGI-7B-MoE (canonical sparse MoE bring-up)
 
 meta:
-  name: MAGI_7B_H200_TRAIN
+  name: MAGI_7B_MOE_H200_TRAIN
   version: v0.1
-  model_config: configs/magi_7b_v0.1.yaml
+  model_config: configs/magi_7b_moe_v0.1.yaml
   corpus: artifacts/synthetic/magi_synth_h200_v0.1/records.jsonl
 
 train:
@@ -20,7 +20,7 @@ train:
   use_amp: true
   amp_dtype: bf16
   require_loss_improve: true
-  checkpoint_dir: artifacts/h200_7b_train
+  checkpoint_dir: artifacts/h200_7b_moe_train
   checkpoint_every: 100
   save_optimizer: false
 
@@ -28,3 +28,4 @@ hardware:
   target: H200_SXM
   master_weights: float32
   compute: bfloat16_autocast
+  architecture: sparse_moe

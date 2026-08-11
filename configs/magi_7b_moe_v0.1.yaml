@@ -1,0 +1,93 @@
+# MAGI-7B-MoE v0.1 — H200 single-GPU sparse MoE bring-up
+# Scaled-down copy of MAGI-35B-MoE topology. Parameter count reduced; architecture preserved.
+# Dense MAGI-7B (configs/magi_7b_v0.1.yaml) is baseline-only and is NOT the H200 research path.
+
+meta:
+  name: MAGI-7B-MoE
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  status: h200_moe_architecture_bringup
+  from_zero: true
+  model_class: moe_decoder
+  primary_role: sparse_moe_bringup
+  parent_family: magi_35b_moe
+  topology_source: configs/magi_35b_moe_v0.1.yaml
+  claim_class_topology: CALCULATED
+  tokenizer_ref: configs/tokenizer_t4_smoke_v0.1.yaml
+  hf_architecture: MagiForCausalLM
+
+architecture:
+  type: decoder_only_prenorm_sparse_moe
+  d_model: 2048
+  n_layers: 32
+  n_dense_layers: 3
+  n_moe_layers: 29
+  n_heads: 16
+  n_kv_heads: 8
+  d_head: 128
+  d_ff_dense: 5632
+  d_ff_expert: 512
+  n_routed_experts: 64
+  n_shared_experts: 1
+  top_k: 4
+  vocab_size: 8192
+  tied_embeddings: true
+  norm: rmsnorm
+  rmsnorm_eps: 1.0e-6
+  activation: swiglu
+  positional: rope
+  rope_theta: 1000000.0
+  bias: false
+  attention: gqa
+  train_context: 4096
+  infer_context: 8192
+
+moe:
+  gate: sigmoid_normalize_topk
+  gate_dtype: fp32
+  capacity_factor_train_min: 1.0
+  capacity_factor_train_max: 1.25
+  load_balance: aux_loss_free_bias
+  router_z_loss_coeff: 1.0e-5
+  hierarchical_routing_hooks: true
+
+init:
+  emb_std: 0.02
+  residual_std_formula: "0.02 / sqrt(2 * n_layers)"
+  claim_class: HYPOTHESIS
+
+precision:
+  proxy: bf16
+  production: bf16
+  master_weights: fp32
+  router_loss_softmax: fp32
+  loss: fp32
+
+hardware:
+  target: H200_SXM
+  proxy_gpu: H200
+  gpu_vram_gb: 141
+  dtype: bfloat16
+  recommended_batch: 1
+  recommended_seq: 2048
+  notes: "Sparse MoE; Adam stores ALL experts (~96GB). Active/token ~1B. seq2048 batch1 expected under 141GB."
+
+tokenizer:
+  id: magi_t4_smoke_v0.1
+  config: configs/tokenizer_t4_smoke_v0.1.yaml
+  artifact: tokenizer/artifacts/magi_t4_smoke_v0.1.json
+  vocab_size: 8192
+
+hf:
+  model_type: magi
+  architecture: MagiForCausalLM
+  use_cache: true
+  return_dict: true
+  tie_word_embeddings: true
+
+expected_param_count:
+  total: 6456870912
+  active_per_token: 966526976
+  cognitive_cycle_1pass: 966526976
+  cognitive_cycle_2pass: 1933053952
+  claim_class: CALCULATED

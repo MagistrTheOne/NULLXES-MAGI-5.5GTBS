@@ -10,7 +10,7 @@ from typing import Any, Callable, Sequence
 from magi.model.transformer import MAGITransformer
 from magi.model.torch_runtime import require_torch
 from magi.train.data import PackedTokenBatch
-from magi.train.loss import causal_lm_loss, collect_router_entropy
+from magi.train.loss import causal_lm_loss, collect_router_telemetry
 
 torch = require_torch()
 
@@ -38,6 +38,9 @@ class TrainMetrics:
     grad_norm: float
     tokens_per_second: float
     router_entropy: float | None
+    expert_load_max: float | None
+    dead_experts: int | None
+    imbalance_ratio: float | None
     lr: float
     nan: bool
 
@@ -101,6 +104,8 @@ def summarize_history(history: Sequence[TrainMetrics]) -> dict[str, Any]:
         "mean_tok_s": sum(item.tokens_per_second for item in history) / len(history),
         "final_grad_norm": history[-1].grad_norm,
         "final_router_entropy": history[-1].router_entropy,
+        "final_dead_experts": history[-1].dead_experts,
+        "final_imbalance_ratio": history[-1].imbalance_ratio,
     }
 
 
@@ -180,6 +185,9 @@ def train_steps(
                         grad_norm=float("nan"),
                         tokens_per_second=0.0,
                         router_entropy=None,
+                        expert_load_max=None,
+                        dead_experts=None,
+                        imbalance_ratio=None,
                         lr=config.lr,
                         nan=True,
                     )
@@ -201,23 +209,35 @@ def train_steps(
 
             elapsed = max(time.perf_counter() - t0, 1.0e-9)
             tokens = _batch_token_count(batch)
-            entropy = collect_router_entropy(model)
+            telemetry = collect_router_telemetry(model)
             metrics = TrainMetrics(
                 step=step,
                 loss=float(loss.detach().float().item()),
                 grad_norm=float(grad_norm),
                 tokens_per_second=tokens / elapsed,
-                router_entropy=None if entropy is None else float(entropy.float().item()),
+                router_entropy=None if telemetry is None else telemetry.entropy,
+                expert_load_max=None
+                if telemetry is None or not telemetry.expert_load
+                else max(telemetry.expert_load),
+                dead_experts=None if telemetry is None else telemetry.dead_experts,
+                imbalance_ratio=None if telemetry is None else telemetry.imbalance_ratio,
                 lr=config.lr,
                 nan=False,
             )
             history.append(metrics)
             if config.log_every > 0 and (step % config.log_every == 0 or step == config.steps):
-                ent = "n/a" if metrics.router_entropy is None else f"{metrics.router_entropy:.4f}"
+                if metrics.router_entropy is None:
+                    moe_log = "router_entropy=n/a dead_experts=n/a imbalance=n/a"
+                else:
+                    moe_log = (
+                        f"router_entropy={metrics.router_entropy:.4f} "
+                        f"dead_experts={metrics.dead_experts} "
+                        f"imbalance={metrics.imbalance_ratio:.3f}"
+                    )
                 print(
                     f"step={metrics.step} loss={metrics.loss:.6f} "
                     f"grad_norm={metrics.grad_norm:.4f} tok/s={metrics.tokens_per_second:.1f} "
-                    f"router_entropy={ent}"
+                    f"{moe_log}"
                 )
             if on_step is not None:
                 on_step(step, metrics, model, optimizer, scaler)
