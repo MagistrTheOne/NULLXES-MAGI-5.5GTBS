@@ -1,7 +1,8 @@
-# RunPod H200 — MAGI-7B deps (torch already in image)
-transformers==4.57.1
+# RunPod H200 — MAGI Scale-0 deps (torch already in image; do NOT reinstall torch)
+# Install AFTER: python -m pip install -e . --no-deps
 safetensors>=0.4.5
 huggingface_hub>=0.24.0
+transformers==4.57.1
 pyyaml>=6.0
 # Optional: flash-attn (build may take several minutes on pod)
 # pip install flash-attn --no-build-isolation
