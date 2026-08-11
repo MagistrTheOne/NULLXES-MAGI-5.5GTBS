@@ -44,6 +44,11 @@ def main() -> int:
         action="store_true",
         help="non-BASE engineering probe only; forbids production checkpoints; may use bringup_8k",
     )
+    parser.add_argument(
+        "--save-probe-checkpoint",
+        action="store_true",
+        help="with --allow-runtime-probe: write PROBE_NOT_BASE weights (still not BASE)",
+    )
     args = parser.parse_args()
 
     return run_single_gpu_train(
@@ -62,6 +67,7 @@ def main() -> int:
         corpus=args.corpus,
         shard=args.shard,
         allow_runtime_probe=args.allow_runtime_probe,
+        save_probe_checkpoint=args.save_probe_checkpoint,
     )
 
 

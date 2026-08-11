@@ -113,6 +113,7 @@ def run_single_gpu_train(
     corpus: Path | None = None,
     shard: Path | None = None,
     allow_runtime_probe: bool = False,
+    save_probe_checkpoint: bool = False,
 ) -> int:
     if is_smoke_name(profile_path):
         raise SystemExit(
@@ -173,9 +174,17 @@ def run_single_gpu_train(
     )
     if allow_runtime_probe:
         print("WARNING: allow_runtime_probe=1 — NOT a MAGI BASE training run")
-        skip_checkpoint = True
-        print("WARNING: checkpoints disabled under runtime probe (no disposable BASE ckpt)")
-
+        if save_probe_checkpoint:
+            print(
+                "WARNING: save_probe_checkpoint=1 — writing PROBE weights only "
+                "(bringup tokenizer; forbidden as BASE / production)"
+            )
+            skip_checkpoint = False
+            if ckpt_every <= 0:
+                ckpt_every = max(1, steps_n)
+        else:
+            skip_checkpoint = True
+            print("WARNING: checkpoints disabled under runtime probe (pass --save-probe-checkpoint)")
 
     print("=== MAGI TRAIN ===")
     print(f"model={cfg.name}")
@@ -190,6 +199,7 @@ def run_single_gpu_train(
     print(f"device={device}")
     print(f"steps={steps_n} seq={seq_n} batch={batch_n} lr={lr_n}")
     print(f"checkpoint_dir={ckpt_dir} every={ckpt_every} save_optimizer={save_opt}")
+    print(f"save_probe_checkpoint={save_probe_checkpoint} skip_checkpoint={skip_checkpoint}")
 
     model = MAGITransformer.from_config(cfg).to(device=device)
 
@@ -375,6 +385,21 @@ def run_single_gpu_train(
         )
         print(f"checkpoint={ckpt}")
         print(f"checkpoint_root={ckpt_dir / 'model.safetensors'}")
+        if allow_runtime_probe and save_probe_checkpoint:
+            probe_meta = {
+                "claim_class": "RUNTIME_PROBE_NOT_BASE",
+                "production_checkpoint": False,
+                "tokenizer": tokenizer.tokenizer_id,
+                "tokenizer_note": "bringup_8k — forbidden for BASE / MAGI_TOKENIZER_V1 path",
+                "model": cfg.name,
+                "steps": steps_n,
+                "final_loss": summary.get("last_loss"),
+                "status": summary.get("status"),
+            }
+            (ckpt_dir / "PROBE_NOT_BASE.json").write_text(
+                json.dumps(probe_meta, indent=2, sort_keys=True) + "\n"
+            )
+            print(f"probe_stamp={ckpt_dir / 'PROBE_NOT_BASE.json'}")
         loaded = load_train_checkpoint(
             ckpt_dir / "model.safetensors",
             model=MAGITransformer.from_config(cfg),
