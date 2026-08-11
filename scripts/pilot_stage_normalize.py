@@ -42,6 +42,7 @@ SOURCE_TEXT_COL: dict[str, str] = {
     "fineweb_en": "text",
     "wikipedia_ru": "text",
     "wikipedia_en": "text",
+    "stack_v1": "content",
 }
 
 # Metadata-only / no body in parquet
@@ -90,6 +91,9 @@ def quality_gate(text: str) -> str | None:
 
 
 def lang_hint(source: str, row: dict[str, Any]) -> str:
+    if source == "stack_v1":
+        lang = row.get("lang") or row.get("language")
+        return str(lang) if lang else "code"
     if source.endswith("_ru") or source == "fineweb2_ru":
         return "ru"
     if source.endswith("_en") or source == "fineweb_en":
