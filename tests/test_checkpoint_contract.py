@@ -71,8 +71,16 @@ try:
         save_train_checkpoint,
     )
     from magi.train.data import PackedTokenBatch
+
+    try:
+        import safetensors  # noqa: F401
+
+        SAFETENSORS_AVAILABLE = True
+    except ImportError:
+        SAFETENSORS_AVAILABLE = False
 except (ImportError, RuntimeError):
     torch = None  # type: ignore
+    SAFETENSORS_AVAILABLE = False
 
 
 def _expert_bias_tensors(model: torch.nn.Module) -> list[torch.Tensor]:
@@ -94,6 +102,7 @@ def _synthetic_batches(vocab_size: int, *, seq_len: int = 16, n: int = 2) -> lis
 
 
 @unittest.skipIf(torch is None, "torch unavailable")
+@unittest.skipUnless(SAFETENSORS_AVAILABLE, "safetensors required for checkpoint contract")
 class CheckpointContractTests(unittest.TestCase):
     def test_manifest_inventory_and_expert_bias_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:

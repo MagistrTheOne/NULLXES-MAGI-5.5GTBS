@@ -6,13 +6,17 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-import torch
-
-from magi.config import load_model_config
-from magi.hf import MagiForCausalLM, native_config_to_hf
-from magi.model import MAGITransformer
-
 ROOT = Path(__file__).resolve().parents[1]
+
+try:
+    import torch
+    from magi.config import load_model_config
+    from magi.hf import HF_AVAILABLE, MagiForCausalLM, native_config_to_hf
+    from magi.model import MAGITransformer
+except (ImportError, RuntimeError):
+    torch = None  # type: ignore
+    HF_AVAILABLE = False  # type: ignore
+
 
 CONFIGS = [
     ROOT / "configs" / "magi_7b_moe_v0.1.yaml",
@@ -23,6 +27,7 @@ CONFIGS = [
 ]
 
 
+@unittest.skipUnless(torch is not None and HF_AVAILABLE, "transformers+torch required for HF config tests")
 class TestAllModelConfigsHF(unittest.TestCase):
     def test_all_configs_hf_meta_init_and_aliases(self):
         for path in CONFIGS:
@@ -40,7 +45,9 @@ class TestAllModelConfigsHF(unittest.TestCase):
                     native = MAGITransformer.from_config(cfg)
                     model = MagiForCausalLM(hf)
                     model.tie_weights(recompute_mapping=False)
-                self.assertEqual(native.parameter_count(), sum(p.numel() for p in model.parameters()))
+                self.assertEqual(
+                    native.parameter_count(), sum(p.numel() for p in model.parameters())
+                )
 
 
 if __name__ == "__main__":
