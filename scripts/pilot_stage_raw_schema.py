@@ -26,6 +26,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 TEXT_ALIASES = ("text", "content", "raw_content", "code", "body", "document", "article")
+# Never treat identifier columns as text body
+TEXT_REJECT_SUFFIXES = ("_id", "_hash", "_key", "_uuid")
+REQUIRED_RAW_BUCKETS = (
+    "fineweb2_ru",
+    "fineweb_en",
+    "finemath",
+    "stack_v2",
+    "wikipedia_ru",
+    "wikipedia_en",
+)
 ROW_PROBE = 2048
 
 
@@ -67,7 +77,10 @@ def _pick_text_col(names: list[str]) -> str | None:
         if alias in lower:
             return lower[alias]
     for n in names:
-        if "text" in n.lower() or "content" in n.lower() or "code" in n.lower():
+        ln = n.lower()
+        if ln.endswith(TEXT_REJECT_SUFFIXES):
+            continue
+        if "text" in ln or ln == "content" or ln.endswith("_content") or ln == "code":
             return n
     return None
 
@@ -111,11 +124,13 @@ def raw_lock(data_root: Path) -> dict[str, Any]:
         "locked_at": _utc(),
         "buckets": buckets,
         "missing_required": [
-            k
-            for k in ("fineweb2_ru", "fineweb2_en", "finemath", "stack_v2", "wikipedia_ru", "wikipedia_en")
-            if k not in buckets or buckets[k]["n_parquet"] == 0
+            k for k in REQUIRED_RAW_BUCKETS if k not in buckets or buckets[k]["n_parquet"] == 0
         ],
-        "notes": "nullxes_domain optional until author slice",
+        "notes": (
+            "nullxes_domain optional until author slice; "
+            "fineweb_en = HuggingFaceFW/fineweb (FineWeb-2 has no English); "
+            "stack_v2 parquet is metadata/SWH ids only — body not in files"
+        ),
     }
     out = reports / "RAW_LOCK_v0.1.json"
     out.write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
