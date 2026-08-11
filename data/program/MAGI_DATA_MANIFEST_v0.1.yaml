@@ -85,6 +85,7 @@ pilot_v0_1:
     algorithms: "byte_bpe,unigram"
   allowed_candidates:
     fineweb2: true
+    fineweb: true
     the_stack_v2: true
     finemath: true
     wikimedia_wikipedia: true
@@ -96,12 +97,13 @@ pilot_v0_1:
       accepted_text_gb_min: 5
       accepted_text_gb_max: 10
       role: natural_russian
-    fineweb2_en:
-      candidate: fineweb2
+    fineweb_en:
+      candidate: fineweb
       lang: en
       accepted_text_gb_min: 5
       accepted_text_gb_max: 10
       role: natural_english
+      notes: "FineWeb-2 excludes English by design; EN = HuggingFaceFW/fineweb sample/10BT"
     stack_python:
       candidate: the_stack_v2
       lang: python
@@ -141,14 +143,28 @@ candidates:
     hub_id: HuggingFaceFW/fineweb-2
     layer: BASE
     role: PRIMARY
-    buckets: "ru_natural_web_documents,en_natural_web_documents,other_multilingual"
-    languages: multilingual_1000plus
+    buckets: "ru_natural_web_documents,other_multilingual"
+    languages: multilingual_non_english
     license: odc-by
     hub_license_tag: odc-by
-    why: "Primary RU/EN/multilingual web; 96 CC snapshots; vs CulturaX/mC4/CC-100/HPLT"
+    why: "Primary non-English web (RU etc); FineWeb-2 has NO English"
     status: PILOT_CANDIDATE
     pilot_scope: PILOT_V0.1
     download_now: false
+
+  fineweb:
+    hub_id: HuggingFaceFW/fineweb
+    layer: BASE
+    role: PRIMARY
+    buckets: "en_natural_web_documents"
+    languages: en
+    license: odc-by
+    hub_license_tag: odc-by
+    why: "English natural web complement to FineWeb-2; pilot via sample/10BT shards"
+    status: PILOT_CANDIDATE
+    pilot_scope: PILOT_V0.1
+    download_now: false
+    pilot_path: sample/10BT/
 
   dolma3_mix_150b:
     hub_id: allenai/dolma3_mix-150B-1025

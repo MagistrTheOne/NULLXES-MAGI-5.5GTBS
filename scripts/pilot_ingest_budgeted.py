@@ -32,13 +32,14 @@ PILOT_SOURCES: dict[str, dict] = {
         "max_gb": 6.0,
         "license": "odc-by",
     },
-    "fineweb2_en": {
-        "candidate": "fineweb2",
-        "hub_id": "HuggingFaceFW/fineweb-2",
+    "fineweb_en": {
+        "candidate": "fineweb",
+        "hub_id": "HuggingFaceFW/fineweb",
         "repo_type": "dataset",
-        "prefixes": ["data/eng_Latn/"],
+        "prefixes": ["sample/10BT/"],
         "max_gb": 6.0,
         "license": "odc-by",
+        "notes": "FineWeb-2 has NO English — EN natural web = FineWeb sample/10BT",
     },
     "stack_python": {
         "candidate": "the_stack_v2",
