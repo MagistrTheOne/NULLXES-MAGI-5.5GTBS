@@ -1,0 +1,41 @@
+# MAGI CASUAL posttrain mixture hypothesis v0.1
+# Source selection still PENDING — no download.
+
+meta:
+  name: MAGI_CASUAL_MIX
+  version: v0.1
+  claim_class: HYPOTHESIS
+  download_now: false
+  depends_on: MAGI_BASE_pretrained
+
+goals:
+  - conversational_ru
+  - informal_en
+  - short_and_long_turns
+  - irony_self_irony
+  - slang
+  - interruptions
+  - code_switching
+  - emotional_transitions
+  - register_control
+
+forbidden:
+  - instruction_answer_only_as_entire_corpus
+  - synthetic_dialogue_volume_farm
+  - private_messenger_dumps_without_consent
+
+mixture_hypothesis:
+  human_dialogue_and_discussion: 0.45
+  informal_writing_comments: 0.20
+  register_annotated_dialogues: 0.15
+  code_switching_ru_en: 0.10
+  multilingual_casual_other: 0.05
+  held_out_eval_slices: 0.05
+
+source_status: PLACEHOLDER_NEEDS_AUTHOR_PICK_LIST
+
+gates:
+  privacy_filter: required
+  license_gate: required
+  not_instruction_monoculture: required
+  synthetic_cap: "<= 5% and must have experimental justification"

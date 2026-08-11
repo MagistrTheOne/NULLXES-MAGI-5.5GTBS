@@ -1,0 +1,42 @@
+# MAGI bring-up tokenizer 8k v0.1
+# Runtime/engineering probe ONLY. NOT a production MAGI tokenizer.
+# FORBIDDEN for BASE pretraining and production checkpoints.
+
+meta:
+  name: MAGI_BRINGUP_8K_TOKENIZER
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  status: BRINGUP_ONLY
+  production_pretraining_allowed: false
+  production_checkpoint_allowed: false
+  role: runtime_probe_and_unit_gates
+  from_zero: true
+  notes: "Keep for encode/decode/runtime checks. Do NOT train MAGI BASE on this vocab."
+
+tokenizer:
+  algorithm: byte_bpe
+  vocab_size: 8192
+  byte_fallback: true
+  normalization: NFKC
+  unk_token: "<unk>"
+  pad_token: "<pad>"
+  bos_token: "<bos>"
+  eos_token: "<eos>"
+
+training:
+  seed_corpus: tokenizer/data/bringup_seed.txt
+  min_merge_freq: 2
+  max_merges: 7932
+
+artifacts:
+  tokenizer_json: tokenizer/artifacts/magi_bringup_8k_v0.1.json
+
+gates:
+  unknown_rate_max: 0.0
+  roundtrip_required: true
+  vocab_size_exact: 8192
+
+successor:
+  next: MAGI_TOKENIZER_V1
+  requires: MAGI_BASE_PILOT_v0.1
+  sweep: configs/tokenizer_experiments_v0.1.yaml

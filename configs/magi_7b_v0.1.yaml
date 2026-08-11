@@ -12,10 +12,14 @@ meta:
   model_class: dense_decoder
   primary_role: dense_comparison_baseline
   parent_family: magi_casual
-  tokenizer_ref: configs/tokenizer_t4_smoke_v0.1.yaml
+  tokenizer_ref: configs/tokenizer_bringup_8k_v0.1.yaml
   hf_architecture: MagiForCausalLM
+  research_reference: true
   canonical_research_path: false
-  notes: "Do not use as H200 MoE bring-up. Use configs/magi_7b_moe_v0.1.yaml."
+  canonical_training_target: false
+  scaling_path: false
+  production_pretraining_allowed: false
+  notes: "A/B vs MoE only. Never 100B tokens. Never default train target."
 
 architecture:
   type: decoder_only_prenorm_dense
@@ -58,9 +62,9 @@ hardware:
   notes: "Dense baseline only. Canonical H200 path is MAGI-7B-MoE."
 
 tokenizer:
-  id: magi_t4_smoke_v0.1
-  config: configs/tokenizer_t4_smoke_v0.1.yaml
-  artifact: tokenizer/artifacts/magi_t4_smoke_v0.1.json
+  id: magi_bringup_8k_v0.1
+  config: configs/tokenizer_bringup_8k_v0.1.yaml
+  artifact: tokenizer/artifacts/magi_bringup_8k_v0.1.json
   vocab_size: 8192
 
 hf:

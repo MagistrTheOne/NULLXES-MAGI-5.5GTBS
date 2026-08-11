@@ -1,0 +1,19 @@
+---
+description: MAGI Data Program — MAGI_DATA_PILOT_v0.1 only, cloud ingest, no character in BASE
+alwaysApply: true
+---
+
+# MAGI Data Program
+
+SoT: `data/program/MAGI_DATA_MANIFEST_v0.1.yaml` + `MAGI_DATA_QUALITY_LAW_v0.1.md` + `MAGI_NEXT_PHASE_v0.1.yaml`
+
+## Rules
+
+- **No bulk download** on local workstation. Cloud only after **PILOT** approval (`MAGI_DATA_PILOT_APPROVED=1`).
+- Scope name: **MAGI_DATA_PILOT_v0.1** (FineWeb2 RU/EN, Stack Py+TS, FineMath, Wiki RU/EN, NULLXES approved).
+- Legacy `MAGI_DATA_MANIFEST_APPROVED=1` ≡ pilot only — never full FineWeb2 / Stack dump.
+- `MAGI_DATA_PRODUCTION_APPROVED` **does not exist** as an authorized path yet.
+- Character / SFT / distillation / synthetic bulk **NOT_APPROVED_FOR_BASE**.
+- Mixture weights are `EXPERIMENTAL_HYPOTHESIS` until pilot metrics exist.
+- `magi_bringup_8k` is **BRINGUP_ONLY** — never BASE pretraining / production checkpoints.
+- If unsure about a corpus license or ingest — **ASK** before downloading.

@@ -1,12 +1,7 @@
 #!/usr/bin/env python3
-"""Validate all MAGI model configs through native + HF paths.
+"""Validate production MAGI model configs (native + HF meta path).
 
-Runs for every production/smoke model YAML:
-  - load_model_config / validate
-  - param_count
-  - MagiConfig / MagiForCausalLM meta init
-  - tie_weights(recompute_mapping=False) transformers>=5 compatibility
-  - DynamicCache bridge smoke on T4 config only (materialized tensors)
+T4/smoke fixtures are NOT in the production set.
 """
 
 from __future__ import annotations
@@ -29,8 +24,7 @@ if not HF_AVAILABLE or MagiForCausalLM is None:
     raise SystemExit(f"magi.hf unavailable: {format_hf_import_error()}")
 
 
-MODEL_CONFIGS = [
-    ROOT / "configs" / "magi_t4_smoke_v0.1.yaml",
+PRODUCTION_CONFIGS = [
     ROOT / "configs" / "magi_7b_moe_v0.1.yaml",
     ROOT / "configs" / "magi_7b_v0.1.yaml",
     ROOT / "configs" / "magi_casual_v0.1.yaml",
@@ -39,7 +33,7 @@ MODEL_CONFIGS = [
 ]
 
 
-def validate_one(path: Path, *, materialize_t4: bool) -> None:
+def validate_one(path: Path) -> None:
     cfg = load_model_config(path)
     report = param_count.analyze(path)
     hf_cfg = native_config_to_hf(cfg)
@@ -74,26 +68,15 @@ def validate_one(path: Path, *, materialize_t4: bool) -> None:
         f"hf_aliases=ok tie_weights=ok"
     )
 
-    if materialize_t4 and cfg.name == "MAGI-T4-SMOKE":
-        concrete = MagiForCausalLM(native_config_to_hf(cfg))
-        concrete.eval()
-        ids = torch.randint(0, cfg.vocab_size, (1, 16), dtype=torch.long)
-        with torch.no_grad():
-            out = concrete(input_ids=ids, use_cache=True)
-        if out.past_key_values is None or out.past_key_values.get_seq_length() != 16:
-            raise RuntimeError("T4 DynamicCache bridge failed")
-        print("OK MAGI-T4-SMOKE       cache_bridge=ok")
-
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate all MAGI model configs")
-    parser.add_argument("--skip-t4-materialize", action="store_true")
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(description="Validate production MAGI model configs")
+    parser.parse_args()
 
-    for path in MODEL_CONFIGS:
+    for path in PRODUCTION_CONFIGS:
         if not path.exists():
             raise FileNotFoundError(path)
-        validate_one(path, materialize_t4=not args.skip_t4_materialize)
+        validate_one(path)
     print("status=OK")
     return 0
 

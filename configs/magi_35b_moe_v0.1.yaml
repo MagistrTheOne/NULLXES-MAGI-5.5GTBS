@@ -6,12 +6,15 @@ meta:
   name: MAGI-35B-MoE-A8B
   version: v0.1
   program_parent: MAGI-5.5GTBS
-  status: first_trainable_gate
+  status: flagship_base_pending_scale_0
   from_zero: true
   model_class: moe_decoder
   claim_class_topology: CALCULATED
   tokenizer_ref: configs/tokenizer_experiments_v0.1.yaml
   hf_architecture: MagiForCausalLM
+  production_pretraining_allowed: false
+  blocked_until: "MAGI_TOKENIZER_V1 and MAGI-7B-MoE R1 PASS"
+  notes: "Flagship BASE after Scale-0 recipe is boring and proven. No simultaneous tokenizer/dataset/router experiments."
 
 architecture:
   type: decoder_only_prenorm_sparse_moe
@@ -46,6 +49,7 @@ moe:
   capacity_factor_train_max: 1.25
   load_balance: aux_loss_free_bias
   router_z_loss_coeff: 1.0e-5
+  bias_update_rate: 1.0e-3
   hierarchical_routing_hooks: true
 
 init:

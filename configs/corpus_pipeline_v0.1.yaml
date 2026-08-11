@@ -4,7 +4,14 @@ meta:
   name: MAGI_CORPUS_PIPELINE
   version: v0.1
   program_parent: MAGI-5.5GTBS
-  dataset_content_defined_later_by_author: true
+  data_program_ref: data/program/MAGI_DATA_MANIFEST_v0.1.yaml
+  quality_law_ref: data/program/MAGI_DATA_QUALITY_LAW_v0.1.md
+  dataset_content_defined_later_by_author: false
+  local_workstation_bulk_download: FORBIDDEN
+  ingest_requires: MAGI_DATA_PILOT_APPROVED
+  ingest_scope: PILOT_V0.1
+  production_ingest_env: MAGI_DATA_PRODUCTION_APPROVED
+  production_ingest_exists: false
 
 pipeline:
   stages:
@@ -33,6 +40,17 @@ synthetic_interface:
   requires_semantic_pins: true
   requires_license_class: NULLXES_SYNTHETIC
   no_external_llm_runtime_dependency: true
+  character_mass_generation: FORBIDDEN
+  volume_inflation: FORBIDDEN
+
+layers:
+  BASE:
+    mixture_ref: data/program/MAGI_DATA_MANIFEST_v0.1.yaml
+  CASUAL:
+    mixture_ref: data/program/casual/MAGI_CASUAL_MIX_v0.1.yaml
+  CHARACTER:
+    spec_ref: data/program/character/MAGI_CHARACTER_SPEC_v0.1.yaml
+    preference_schema: schemas/magi_character_preference.schema.json
 
 domains:
   - general_language
@@ -52,6 +70,7 @@ domains:
   - multilingual
   - casual_dialogue
   - policy_conditioned_dialogue
+  - character_preference
 
 shards:
   format: token_packed_binary_with_json_manifest
@@ -66,3 +85,5 @@ quality_gates:
   fuzzy_dedup_required: true
   contamination_filter_required: true
   pii_filter_required: true
+  row_count_is_not_quality: true
+  gb_downloaded_is_not_quality: true

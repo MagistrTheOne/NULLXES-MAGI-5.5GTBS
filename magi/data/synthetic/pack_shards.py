@@ -12,8 +12,9 @@ from typing import Any, Sequence
 from magi.data.synthetic.record import SyntheticRecord
 from magi.tokenizer.byte_bpe import MagiByteBPETokenizer
 
-SHARD_VERSION = "v0.1"
+SHARD_VERSION = "v0.2"
 TOKEN_DTYPE = "int32"
+DEFAULT_TARGET_TOKENS_PER_SHARD = 65_536
 
 
 def _utc_now() -> str:
@@ -42,6 +43,31 @@ def pack_token_windows(token_ids: Sequence[int], *, seq_len: int) -> list[list[i
     usable = (len(stream) // seq_len) * seq_len
     stream = stream[:usable]
     return [stream[i : i + seq_len] for i in range(0, usable, seq_len)]
+
+
+def split_windows_by_token_budget(
+    windows: Sequence[Sequence[int]],
+    *,
+    target_tokens_per_shard: int,
+) -> list[list[Sequence[int]]]:
+    if target_tokens_per_shard < 1:
+        raise ValueError("target_tokens_per_shard must be >= 1")
+    if not windows:
+        raise ValueError("windows empty")
+    shards: list[list[Sequence[int]]] = []
+    current: list[Sequence[int]] = []
+    current_tokens = 0
+    for window in windows:
+        wlen = len(window)
+        if current and current_tokens + wlen > target_tokens_per_shard:
+            shards.append(current)
+            current = []
+            current_tokens = 0
+        current.append(window)
+        current_tokens += wlen
+    if current:
+        shards.append(current)
+    return shards
 
 
 def write_shard_bin(path: Path, windows: Sequence[Sequence[int]]) -> str:
@@ -85,11 +111,12 @@ def write_training_shard(
     dataset_id: str,
     config_hash: str | None = None,
     split: str = "train",
+    raw_token_count: int | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     bin_path = output_dir / f"{shard_id}.bin"
     shard_hash = write_shard_bin(bin_path, windows)
-    token_count = sum(len(w) for w in windows)
+    packed_token_count = sum(len(w) for w in windows)
     manifest = {
         "shard_id": shard_id,
         "version": SHARD_VERSION,
@@ -97,7 +124,10 @@ def write_training_shard(
         "tokenizer_id": tokenizer.tokenizer_id,
         "tokenizer_hash": tokenizer_hash,
         "sequence_length": len(windows[0]) if windows else 0,
-        "token_count": token_count,
+        "raw_token_count": raw_token_count,
+        "packed_token_count": packed_token_count,
+        "training_token_count": packed_token_count,
+        "token_count": packed_token_count,
         "document_count": int(document_count),
         "dataset_lineage": [
             {
@@ -115,7 +145,7 @@ def write_training_shard(
         },
         "quality_summary": {
             "windows": len(windows),
-            "generator_id": "magi_synth_templates_v0.1",
+            "generator_id": "magi_synth_templates_v0.2",
         },
         "shard_hash": shard_hash,
         "created_at": _utc_now(),
@@ -125,3 +155,61 @@ def write_training_shard(
     man_path = output_dir / f"{shard_id}.manifest.json"
     man_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return manifest
+
+
+def write_training_shards(
+    output_dir: Path,
+    *,
+    windows: Sequence[Sequence[int]],
+    tokenizer: MagiByteBPETokenizer,
+    tokenizer_hash: str,
+    document_count: int,
+    dataset_id: str,
+    config_hash: str | None = None,
+    split: str = "train",
+    target_tokens_per_shard: int = DEFAULT_TARGET_TOKENS_PER_SHARD,
+    raw_token_count: int | None = None,
+) -> dict[str, Any]:
+    chunks = split_windows_by_token_budget(
+        windows, target_tokens_per_shard=target_tokens_per_shard
+    )
+    shard_manifests: list[dict[str, Any]] = []
+    for i, chunk in enumerate(chunks):
+        shard_id = f"{split}-{i:05d}"
+        shard_manifests.append(
+            write_training_shard(
+                output_dir,
+                shard_id=shard_id,
+                windows=chunk,
+                tokenizer=tokenizer,
+                tokenizer_hash=tokenizer_hash,
+                document_count=document_count if len(chunks) == 1 else 0,
+                dataset_id=dataset_id,
+                config_hash=config_hash,
+                split=split,
+                raw_token_count=raw_token_count if len(chunks) == 1 else None,
+            )
+        )
+    total_packed = sum(int(m["packed_token_count"]) for m in shard_manifests)
+    global_manifest = {
+        "version": SHARD_VERSION,
+        "dataset_id": dataset_id,
+        "split": split,
+        "tokenizer_id": tokenizer.tokenizer_id,
+        "tokenizer_hash": tokenizer_hash,
+        "target_tokens_per_shard": int(target_tokens_per_shard),
+        "shard_count": len(shard_manifests),
+        "shards": [m["shard_id"] for m in shard_manifests],
+        "raw_token_count": raw_token_count,
+        "packed_token_count": total_packed,
+        "training_token_count": total_packed,
+        "document_count": int(document_count),
+        "created_at": _utc_now(),
+    }
+    if config_hash is not None:
+        global_manifest["config_hash"] = config_hash
+    (output_dir / "shards_manifest.json").write_text(
+        json.dumps(global_manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return global_manifest

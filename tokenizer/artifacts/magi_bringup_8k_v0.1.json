@@ -1,5 +1,5 @@
 {
-  "tokenizer_id": "magi_t4_smoke_v0.1",
+  "tokenizer_id": "magi_bringup_8k_v0.1",
   "version": "magi-tokenizer-v0.1",
   "algorithm": "byte_bpe",
   "normalization": "NFKC",

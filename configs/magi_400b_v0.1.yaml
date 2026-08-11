@@ -6,12 +6,15 @@ meta:
   name: MAGI-400B
   version: v0.1
   program_parent: MAGI-5.5GTBS
-  status: baseline_monster
+  status: FUTURE_SCALE_TARGET
   from_zero: true
   model_class: moe_decoder
   claim_class_topology: CALCULATED
   tokenizer_ref: configs/tokenizer_experiments_v0.1.yaml
   hf_architecture: MagiForCausalLM
+  production_pretraining_allowed: false
+  scaling_path: false
+  notes: "Architecture envelope only. No train/optimize until 35B BASE proves the system."
 
 architecture:
   type: decoder_only_prenorm_sparse_moe
@@ -48,6 +51,7 @@ moe:
   capacity_factor_train_max: 1.25
   load_balance: aux_loss_free_bias
   router_z_loss_coeff: 1.0e-5
+  bias_update_rate: 1.0e-3
   hierarchical_routing_hooks: true
 
 init:

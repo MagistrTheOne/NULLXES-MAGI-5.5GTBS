@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""HF/native compatibility checks for every MAGI model config."""
+"""HF/native compatibility checks for MAGI production model configs."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ from magi.model import MAGITransformer
 ROOT = Path(__file__).resolve().parents[1]
 
 CONFIGS = [
-    ROOT / "configs" / "magi_t4_smoke_v0.1.yaml",
+    ROOT / "configs" / "magi_7b_moe_v0.1.yaml",
+    ROOT / "configs" / "magi_7b_v0.1.yaml",
     ROOT / "configs" / "magi_casual_v0.1.yaml",
     ROOT / "configs" / "magi_35b_moe_v0.1.yaml",
     ROOT / "configs" / "magi_400b_v0.1.yaml",

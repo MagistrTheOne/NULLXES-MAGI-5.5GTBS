@@ -1,0 +1,37 @@
+---
+description: MAGI next phase — DATA PILOT then TOKENIZER_V1 then Scale-0 7B-MoE
+alwaysApply: true
+---
+
+# MAGI Next Phase (binding)
+
+SoT: `data/program/MAGI_NEXT_PHASE_v0.1.yaml`
+
+## Current push
+
+**DATA PILOT → MAGI_TOKENIZER_V1** — not a production model checkpoint.
+
+## Forbidden now
+
+- Train MAGI BASE / production checkpoints on `magi_bringup_8k_v0.1`
+- Treat bringup-8k as `KEEP_PRODUCTION` tokenizer
+- Character expansion / bulk synthetic / Distillation / SFT for BASE
+- Casual from random init
+- Dense-7B as scaling path
+- Start 400B training
+- Unapproved bulk downloads
+- New architecture scaffolding unrelated to milestones 1–13
+
+## Allowed
+
+- `magi_bringup_8k` for runtime/unit probes only (`--allow-runtime-probe`, no BASE ckpt)
+- Cloud PILOT ingest after `MAGI_DATA_PILOT_APPROVED=1`
+- Tokenizer sweep after pilot (BPE/Unigram × 65k/98k/131k/164k)
+
+## Genealogy
+
+```text
+DATA PILOT → MAGI_TOKENIZER_V1 → 7B-MoE R0 → R1 → 35B-MoE BASE → posttrain → Casual/Character
+```
+
+7B-MoE = **SCALE_0** recipe prover, not disposable bring-up.

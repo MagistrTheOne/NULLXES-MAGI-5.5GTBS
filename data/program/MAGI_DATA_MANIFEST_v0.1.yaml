@@ -1,0 +1,334 @@
+# MAGI DATA MANIFEST v0.1
+# PILOT_V0.1 is the only ingestable scope after MAGI_DATA_PILOT_APPROVED=1.
+# Production full ingest does NOT exist yet — MAGI_DATA_PRODUCTION_APPROVED is unset by design.
+# Bulk download: CLOUD ONLY. Forbidden on local workstation.
+# Format: MAGI simple-YAML (no list items) for stdlib loader.
+
+meta:
+  name: MAGI_DATA_MANIFEST
+  version: v0.1
+  pilot_name: MAGI_DATA_PILOT_v0.1
+  program_parent: MAGI-5.5GTBS
+  company: NULLXES
+  status: awaiting_author_signoff_MAGI_DATA_PILOT_v0.1
+  claim_class_mixture: EXPERIMENTAL_HYPOTHESIS
+  download_policy: cloud_only_after_approval
+  local_workstation_download: FORBIDDEN
+  approval_gate: author_must_approve_MAGI_DATA_PILOT_v0.1_before_any_ingest
+  next_phase_ref: data/program/MAGI_NEXT_PHASE_v0.1.yaml
+  hub_metadata_checked: "2026-08-11"
+
+layers:
+  BASE:
+    trains: language_world_code_stem
+    model_gate: MAGI-35B-MoE-A8B_pretrain
+  CASUAL:
+    trains: informal_dialogue_registers
+    model_gate: posttrain_after_BASE
+  CHARACTER:
+    trains: nullxes_magi_behavioral_identity
+    model_gate: preference_or_sft_after_CASUAL
+    mass_synthetic: FORBIDDEN
+    base_ingest: NOT_APPROVED_FOR_BASE
+
+approval:
+  scope: MAGI_DATA_PILOT_v0.1
+  pilot_only: true
+  production_ingest: false
+  require_env_pilot: MAGI_DATA_PILOT_APPROVED
+  require_env_production: MAGI_DATA_PRODUCTION_APPROVED
+  legacy_env_alias: MAGI_DATA_MANIFEST_APPROVED
+  notes: "legacy MAGI_DATA_MANIFEST_APPROVED=1 maps to PILOT only, never production full dump"
+
+base_mixture_v0_1:
+  mixture_status: EXPERIMENTAL_HYPOTHESIS
+  production_weighting_approved: false
+  claim_class: HYPOTHESIS
+  notes: "Do NOT treat bucket weights as approved production mix. Reweight after pilot metrics."
+  buckets:
+    ru_natural_web_documents: 0.25
+    en_natural_web_documents: 0.25
+    code: 0.18
+    stem_scientific: 0.10
+    mathematics: 0.07
+    long_form_books_manuals: 0.05
+    encyclopedic: 0.04
+    structured_data: 0.03
+    other_multilingual: 0.03
+
+pilot_v0_1:
+  name: MAGI_DATA_PILOT_v0.1
+  status: AWAITING_AUTHOR_APPROVAL
+  scope: MAGI_DATA_PILOT_v0.1
+  purpose: data_pipeline_pilot_for_tokenizer_then_base
+  mixture_status: EXPERIMENTAL_HYPOTHESIS
+  production_weighting_approved: false
+  character_in_base: NOT_APPROVED_FOR_BASE
+  distillation_in_base: NOT_APPROVED_FOR_BASE
+  sft_in_base: NOT_APPROVED_FOR_BASE
+  synthetic_generator_for_base: NOT_APPROVED_FOR_BASE
+  expected_accepted_text_gb_min: 20
+  expected_accepted_text_gb_max: 35
+  metrics_required_before_production_mix:
+    raw_docs: true
+    accepted_docs: true
+    dedup_rate: true
+    language_purity: true
+    quality_distribution: true
+    tokenizer_fertility: true
+    tokens_per_domain: true
+    contamination: true
+  tokenizer_policy:
+    tokenizer_training_before_final_mix: false
+    tokenizer_experiments_after_pilot_ingest: true
+    vocab_sweep: "65536,98304,131072,163840"
+    algorithms: "byte_bpe,unigram"
+  allowed_candidates:
+    fineweb2: true
+    the_stack_v2: true
+    finemath: true
+    wikimedia_wikipedia: true
+    nullxes_domain: true
+  sources:
+    fineweb2_ru:
+      candidate: fineweb2
+      lang: ru
+      accepted_text_gb_min: 5
+      accepted_text_gb_max: 10
+      role: natural_russian
+    fineweb2_en:
+      candidate: fineweb2
+      lang: en
+      accepted_text_gb_min: 5
+      accepted_text_gb_max: 10
+      role: natural_english
+    stack_python:
+      candidate: the_stack_v2
+      lang: python
+      accepted_text_gb_min: 3
+      accepted_text_gb_max: 5
+      per_repo_license_gate: required
+    stack_typescript:
+      candidate: the_stack_v2
+      lang: typescript
+      accepted_text_gb_min: 2
+      accepted_text_gb_max: 3
+      per_repo_license_gate: required
+    finemath_slice:
+      candidate: finemath
+      accepted_text_gb_min: 2
+      accepted_text_gb_max: 3
+      role: math_slice
+    wikipedia_ru_en:
+      candidate: wikimedia_wikipedia
+      langs: "ru,en"
+      accepted_text_gb_min: 2
+      accepted_text_gb_max: 3
+      role: factual_document_slice
+    nullxes_approved_slice:
+      candidate: nullxes_domain
+      role: approved_internal_only
+      notes: "only already-approved NULLXES slice; no expansion without author"
+
+code_language_priority:
+  primary: "python,typescript,javascript,c,cpp,rust,sql,bash,cuda"
+  markup_config: "json,yaml,markdown,html,css"
+  reject_as_equal_weight: esoteric_languages_for_vanity_counts
+  pilot_languages: "python,typescript"
+
+candidates:
+  fineweb2:
+    hub_id: HuggingFaceFW/fineweb-2
+    layer: BASE
+    role: PRIMARY
+    buckets: "ru_natural_web_documents,en_natural_web_documents,other_multilingual"
+    languages: multilingual_1000plus
+    license: odc-by
+    hub_license_tag: odc-by
+    why: "Primary RU/EN/multilingual web; 96 CC snapshots; vs CulturaX/mC4/CC-100/HPLT"
+    status: PILOT_CANDIDATE
+    pilot_scope: PILOT_V0.1
+    download_now: false
+
+  dolma3_mix_150b:
+    hub_id: allenai/dolma3_mix-150B-1025
+    layer: BASE
+    role: REFERENCE_MIXTURE
+    buckets: "en_natural_web_documents,stem_scientific,code,mathematics,encyclopedic"
+    languages: en
+    license: odc-by
+    hub_license_tag: odc-by
+    why: "Reference mix proportions; MAGI will overweight RU+code vs this EN recipe"
+    reference_web: 0.769
+    reference_science_pdfs: 0.126
+    reference_code: 0.0706
+    reference_math: 0.026
+    status: REFERENCE_NOT_IN_PILOT
+    download_now: false
+
+  dolma3_mix_6t_7b:
+    hub_id: allenai/dolma3_mix-6T-1025-7B
+    layer: BASE
+    role: PRIMARY_OR_REFERENCE
+    buckets: "en_natural_web_documents,stem_scientific,code,mathematics"
+    languages: en
+    license: odc-by
+    hub_license_tag: odc-by
+    why: "Large EN general/science/code/math mix for BASE"
+    status: REFERENCE_NOT_IN_PILOT
+    download_now: false
+
+  dolma_classic:
+    hub_id: allenai/dolma
+    layer: BASE
+    role: REFERENCE
+    buckets: "en_natural_web_documents,stem_scientific,code,encyclopedic,long_form_books_manuals"
+    languages: en
+    license: odc-by
+    hub_license_tag: odc-by
+    why: "Historical mix reference (web/academic/code/books/encyclopedia)"
+    status: REFERENCE_NOT_IN_PILOT
+    download_now: false
+
+  the_stack_v2:
+    hub_id: bigcode/the-stack-v2
+    layer: BASE
+    role: CODE_PRIMARY
+    buckets: code
+    languages: code
+    license: other
+    hub_license_tag: other
+    why: "CODE PRIMARY; near-dedup; provenance retained; per-repo license gate REQUIRED"
+    legal_notes: "Software Heritage/INRIA bulk terms may apply; verify before cloud pull"
+    pilot_languages: "python,typescript"
+    status: PILOT_CANDIDATE
+    pilot_scope: PILOT_V0.1
+    download_now: false
+
+  finemath:
+    hub_id: HuggingFaceTB/finemath
+    layer: BASE
+    role: MATH
+    buckets: mathematics
+    languages: en_math
+    license: odc-by
+    hub_license_tag: odc-by
+    why: "Quality mathematical language"
+    status: PILOT_CANDIDATE
+    pilot_scope: PILOT_V0.1
+    download_now: false
+
+  wikimedia_wikipedia:
+    hub_id: wikimedia/wikipedia
+    layer: BASE
+    role: ENCYCLOPEDIC_SLICE
+    buckets: encyclopedic
+    languages: "ru,en"
+    license: VERIFY_PER_DUMP
+    why: "Small factual slice — not majority of mix"
+    mixture_cap_hint: "within encyclopedic 4 percent bucket"
+    status: PILOT_CANDIDATE
+    pilot_scope: PILOT_V0.1
+    download_now: false
+
+  arxiv_scientific:
+    hub_id: TBD_arxiv_or_scientific_pdf_text
+    layer: BASE
+    role: STEM
+    buckets: stem_scientific
+    languages: en
+    license: VERIFY_PER_SOURCE
+    why: "STEM + LaTeX"
+    status: PLACEHOLDER_NEEDS_SOURCE_SELECTION
+    download_now: false
+
+  open_distillation_codex:
+    hub_id: TBD_open_distillation_codex
+    layer: POSTTRAIN
+    role: INSTRUCT_REASONING_OPTIONAL
+    buckets: none
+    languages: en
+    license: VERIFY
+    why: "Posttrain only — not BASE majority"
+    status: NOT_APPROVED_FOR_BASE
+    download_now: false
+
+  nullxes_domain:
+    hub_id: NULLXES/private_or_local
+    layer: BASE
+    role: DOMAIN
+    buckets: "structured_data,stem_scientific"
+    languages: "ru,en"
+    license: NULLXES_INTERNAL
+    why: "NULLXES subject-matter corpus — approved slice only"
+    status: PILOT_CANDIDATE
+    pilot_scope: PILOT_V0.1
+    download_now: false
+
+  casual_ru_en_dialogue_pool:
+    hub_id: TBD_multi_source
+    layer: CASUAL
+    role: PRIMARY
+    buckets: casual_dialogue
+    languages: "ru,en"
+    license: VERIFY_EACH_SOURCE
+    why: "Real conversational registers — not instruction-only"
+    status: NOT_APPROVED_FOR_BASE
+    download_now: false
+
+  magi_character_v1:
+    hub_id: NULLXES/MAGI_CHARACTER_V1
+    layer: CHARACTER
+    role: PRIMARY
+    buckets: character
+    languages: "ru,en"
+    license: NULLXES_INTERNAL
+    why: "Specification + golden seeds only until BASE text continuation works"
+    mass_llm_generation: FORBIDDEN
+    status: SPEC_PLUS_GOLDEN_SEEDS_ONLY
+    base_ingest: NOT_APPROVED_FOR_BASE
+    download_now: false
+
+ingest_gate:
+  require_env_pilot: MAGI_DATA_PILOT_APPROVED
+  require_env_production: MAGI_DATA_PRODUCTION_APPROVED
+  legacy_env_alias: MAGI_DATA_MANIFEST_APPROVED
+  production_env_exists: false
+  require_cloud: true
+  forbid_local_bulk: true
+  approval_scope_on_legacy_alias: PILOT_V0.1
+
+approval_checklist:
+  provenance_recorded: true
+  upstream_license_review_required: true
+  commercial_use_gate_required: true
+  raw_text_only_for_base: true
+  foreign_pretokenized_data_forbidden: true
+  exact_dedup_required: true
+  fuzzy_dedup_required: true
+  cross_source_dedup_required: true
+  pii_filter_required: true
+  secrets_filter_required_for_code: true
+  benchmark_contamination_filter_required: true
+  evaluation_vault_excluded: true
+  language_validation_required: true
+  quality_scoring_required: true
+  source_provenance_must_survive_processing: true
+  tokenizer_training_before_final_mix: false
+  tokenizer_experiments_after_pilot_ingest: true
+  synthetic_bulk_generation: forbidden
+  synthetic_paraphrase_expansion: forbidden
+  recursive_llm_generation: forbidden
+  character_data_in_base: forbidden
+  sft_data_in_base: forbidden
+  distillation_data_in_base: forbidden
+  pilot_only: true
+  production_ingest: false
+  licenses_ok: false
+  mixture_ok: false
+  code_langs_ok: false
+  casual_sources_ok: false
+  character_human_curated_ok: false
+  cloud_machine_designated: false
+  author_signed: false
+  author_signed_scope: NONE

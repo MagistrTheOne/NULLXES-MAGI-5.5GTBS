@@ -1,19 +1,21 @@
-# MAGI synthetic corpus profile v0.1
+# MAGI synthetic bring-up corpus v0.2
 # Deterministic templates only. No external LLM runtime.
+# Regime: pipeline validation — NOT production pretraining mixture.
 
 meta:
-  name: MAGI_SYNTH_V0.1
-  version: v0.1
+  name: MAGI_SYNTH_V0.2
+  version: v0.2
   program_parent: MAGI-5.5GTBS
-  dataset_id: magi_synth_v0.1
-  generator_id: magi_synth_templates_v0.1
+  dataset_id: magi_synth_v0.2
+  generator_id: magi_synth_templates_v0.2
   license_status: NULLXES_SYNTHETIC
   source_type: nullxes_synthetic
+  regime: bring_up_not_production_pretrain
 
 generate:
   n_docs: 5000
   seed: 42
-  exact_dedup: true
+  dedup: semantic_hash
 
 domain_weights:
   mathematics: 0.16
@@ -27,14 +29,15 @@ domain_weights:
 
 tokenizer:
   vocab_size: 8192
-  paired_model_config: configs/magi_t4_smoke_v0.1.yaml
+  artifact: tokenizer/artifacts/magi_bringup_8k_v0.1.json
+  paired_model_config: configs/magi_7b_moe_v0.1.yaml
 
 packing:
   seq_len: 128
-  shard_id: train-00000
+  target_tokens_per_shard: 65536
   split: train
 
 output:
-  root: artifacts/synthetic/magi_synth_v0.1
+  root: artifacts/synthetic/magi_synth_v0.2
   golden_docs: 64
-  golden_root: data/synthetic/magi_synth_v0.1/golden
+  golden_root: data/synthetic/magi_synth_v0.2/golden

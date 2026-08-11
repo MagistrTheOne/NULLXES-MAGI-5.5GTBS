@@ -106,6 +106,11 @@ class ModelConfig:
     top_k: int | None = None
     train_context: int | None = None
     infer_context: int | None = None
+    # MoE runtime (from YAML `moe:`). Defaults keep smoke configs valid.
+    moe_load_balance: str | None = None
+    router_z_loss_coeff: float | None = None
+    moe_bias_update_rate: float | None = None
+    moe_gate: str | None = None
 
     @property
     def is_moe(self) -> bool:
@@ -146,6 +151,10 @@ def load_model_config(path: str | Path) -> ModelConfig:
     raw = load_simple_yaml(path)
     meta = raw.get("meta", {})
     arch = raw.get("architecture", {})
+    moe = raw.get("moe", {}) or {}
+    load_balance = moe.get("load_balance")
+    z_coeff = moe.get("router_z_loss_coeff")
+    bias_rate = moe.get("bias_update_rate", 1.0e-3 if load_balance == "aux_loss_free_bias" else 0.0)
     cfg = ModelConfig(
         name=str(meta["name"]),
         model_class=str(meta["model_class"]),
@@ -169,6 +178,10 @@ def load_model_config(path: str | Path) -> ModelConfig:
         top_k=_optional_int(arch.get("top_k")),
         train_context=_optional_int(arch.get("train_context")),
         infer_context=_optional_int(arch.get("infer_context")),
+        moe_load_balance=None if load_balance is None else str(load_balance),
+        router_z_loss_coeff=_optional_float(z_coeff),
+        moe_bias_update_rate=_optional_float(bias_rate),
+        moe_gate=None if moe.get("gate") is None else str(moe.get("gate")),
     )
     cfg.validate()
     return cfg
@@ -176,3 +189,7 @@ def load_model_config(path: str | Path) -> ModelConfig:
 
 def _optional_int(value: Any) -> int | None:
     return None if value is None else int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    return None if value is None else float(value)

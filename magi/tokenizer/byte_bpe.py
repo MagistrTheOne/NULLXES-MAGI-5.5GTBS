@@ -1,6 +1,8 @@
-"""Byte-level BPE tokenizer for MAGI smoke gates.
+"""Byte-level BPE tokenizer for MAGI bring-up.
 
-stdlib-only. Production 131k candidates remain under tokenizer experiment specs.
+stdlib-only. Production 131k candidates remain under tokenizer experiment specs
+(`configs/tokenizer_experiments_v0.1.yaml`) — artifact not yet trained.
+Current ACTUAL usable artifact: tokenizer/artifacts/magi_bringup_8k_v0.1.json
 """
 
 from __future__ import annotations
@@ -13,6 +15,9 @@ from typing import Iterable
 
 
 SPECIAL_TOKENS = ("<unk>", "<pad>", "<bos>", "<eos>")
+BRINGUP_TOKENIZER_ID = "magi_bringup_8k_v0.1"
+BRINGUP_ARTIFACT = Path("tokenizer") / "artifacts" / "magi_bringup_8k_v0.1.json"
+BRINGUP_SEED = Path("tokenizer") / "data" / "bringup_seed.txt"
 
 
 class MagiByteBPETokenizer:
@@ -26,7 +31,7 @@ class MagiByteBPETokenizer:
         bos_token: str = "<bos>",
         eos_token: str = "<eos>",
         normalization: str = "NFKC",
-        tokenizer_id: str = "magi_t4_smoke_v0.1",
+        tokenizer_id: str = BRINGUP_TOKENIZER_ID,
         version: str = "magi-tokenizer-v0.1",
     ) -> None:
         self.merges = [(a, b) for a, b in merges]
@@ -82,7 +87,6 @@ class MagiByteBPETokenizer:
             if token is None or token in SPECIAL_TOKENS or token.startswith("<extra_"):
                 continue
             raw.append(token)
-        # Tokens are latin-1 code-units representing UTF-8 bytes.
         byte_values = bytes(ord(ch) & 0xFF for ch in "".join(raw))
         return byte_values.decode("utf-8", errors="replace")
 
@@ -119,13 +123,20 @@ class MagiByteBPETokenizer:
             bos_token=payload.get("bos_token", "<bos>"),
             eos_token=payload.get("eos_token", "<eos>"),
             normalization=payload.get("normalization", "NFKC"),
-            tokenizer_id=payload.get("tokenizer_id", "magi_tokenizer"),
+            tokenizer_id=payload.get("tokenizer_id", BRINGUP_TOKENIZER_ID),
             version=payload.get("version", "magi-tokenizer-v0.1"),
         )
 
 
 def load_tokenizer(path: str | Path) -> MagiByteBPETokenizer:
-    return MagiByteBPETokenizer.load(path)
+    tok = MagiByteBPETokenizer.load(path)
+    tid = tok.tokenizer_id.lower()
+    if "t4" in tid or "smoke" in tid:
+        raise ValueError(
+            f"Refuse T4/smoke tokenizer_id={tok.tokenizer_id!r}. "
+            f"Use {BRINGUP_TOKENIZER_ID} or production 131k artifact."
+        )
+    return tok
 
 
 def train_byte_bpe(
@@ -134,10 +145,13 @@ def train_byte_bpe(
     vocab_size: int = 8192,
     min_merge_freq: int = 2,
     normalization: str = "NFKC",
-    tokenizer_id: str = "magi_t4_smoke_v0.1",
+    tokenizer_id: str = BRINGUP_TOKENIZER_ID,
 ) -> MagiByteBPETokenizer:
     if vocab_size < 260:
         raise ValueError("vocab_size must cover specials + 256 bytes")
+    tid = tokenizer_id.lower()
+    if "t4" in tid or "smoke" in tid:
+        raise ValueError(f"Refuse training smoke/T4 tokenizer_id={tokenizer_id!r}")
     vocab: dict[str, int] = {tok: i for i, tok in enumerate(SPECIAL_TOKENS)}
     for byte_value in range(256):
         vocab[chr(byte_value)] = len(vocab)
@@ -168,7 +182,6 @@ def train_byte_bpe(
         if len(vocab) >= vocab_size:
             break
 
-    # Fill remaining ids deterministically if merges exhausted early.
     filler = 0
     while len(vocab) < vocab_size:
         name = f"<extra_{filler}>"
@@ -183,25 +196,46 @@ def train_byte_bpe(
     )
 
 
-def build_t4_smoke_tokenizer(
+def load_bringup_tokenizer(*, root: str | Path | None = None) -> MagiByteBPETokenizer:
+    """Load the ACTUAL current MAGI tokenizer artifact (8k bring-up)."""
+    base = Path(root) if root is not None else Path(__file__).resolve().parents[2]
+    path = base / BRINGUP_ARTIFACT
+    if not path.exists():
+        raise FileNotFoundError(
+            f"bring-up tokenizer missing: {path}. "
+            "Train via configs/tokenizer_bringup_8k_v0.1.yaml seed corpus. "
+            "Production 131k is not trained yet."
+        )
+    return MagiByteBPETokenizer.load(path)
+
+
+def build_bringup_tokenizer(
     *,
     seed_path: str | Path | None = None,
     artifact_path: str | Path | None = None,
     vocab_size: int = 8192,
+    root: str | Path | None = None,
 ) -> MagiByteBPETokenizer:
-    root = Path(__file__).resolve().parents[2]
-    seed = Path(seed_path) if seed_path else root / "tokenizer" / "data" / "t4_smoke_seed.txt"
-    artifact = (
-        Path(artifact_path)
-        if artifact_path
-        else root / "tokenizer" / "artifacts" / "magi_t4_smoke_v0.1.json"
-    )
+    """Load bring-up artifact, or train from bringup_seed if artifact absent."""
+    base = Path(root) if root is not None else Path(__file__).resolve().parents[2]
+    artifact = Path(artifact_path) if artifact_path else base / BRINGUP_ARTIFACT
     if artifact.exists():
         return MagiByteBPETokenizer.load(artifact)
+    seed = Path(seed_path) if seed_path else base / BRINGUP_SEED
+    if not seed.exists():
+        raise FileNotFoundError(f"bring-up seed missing: {seed}")
     texts = seed.read_text(encoding="utf-8").splitlines()
-    tokenizer = train_byte_bpe(texts, vocab_size=vocab_size, tokenizer_id="magi_t4_smoke_v0.1")
+    tokenizer = train_byte_bpe(texts, vocab_size=vocab_size, tokenizer_id=BRINGUP_TOKENIZER_ID)
     tokenizer.save(artifact)
     return tokenizer
+
+
+def build_t4_smoke_tokenizer(*_args, **_kwargs):
+    raise RuntimeError(
+        "build_t4_smoke_tokenizer is removed. "
+        "Use load_bringup_tokenizer() / build_bringup_tokenizer() "
+        f"(artifact={BRINGUP_ARTIFACT})."
+    )
 
 
 def _merge_pair(pieces: list[str], pair: tuple[str, str]) -> list[str]:

@@ -1,20 +1,27 @@
-# MAGI-7B-MoE v0.1 — H200 single-GPU sparse MoE bring-up
-# Scaled-down copy of MAGI-35B-MoE topology. Parameter count reduced; architecture preserved.
-# Dense MAGI-7B (configs/magi_7b_v0.1.yaml) is baseline-only and is NOT the H200 research path.
+# MAGI-7B-MoE v0.1 — SCALE_0
+# First real member of the MAGI Sparse-MoE family (recipe prover before 35B).
+# NOT a disposable bring-up toy. BASE training waits for MAGI_TOKENIZER_V1.
+# Dense MAGI-7B is A/B reference only — not the scaling path.
 
 meta:
   name: MAGI-7B-MoE
   version: v0.1
   program_parent: MAGI-5.5GTBS
-  status: h200_moe_architecture_bringup
+  status: SCALE_0
+  role: magi_family_scale_0_recipe_prover
   from_zero: true
   model_class: moe_decoder
-  primary_role: sparse_moe_bringup
+  primary_role: sparse_moe_scale_0
   parent_family: magi_35b_moe
   topology_source: configs/magi_35b_moe_v0.1.yaml
   claim_class_topology: CALCULATED
-  tokenizer_ref: configs/tokenizer_t4_smoke_v0.1.yaml
   hf_architecture: MagiForCausalLM
+  canonical_training_target: true
+  scaling_path: true
+  production_pretraining_allowed: false
+  blocked_until: MAGI_TOKENIZER_V1
+  next_phase_ref: data/program/MAGI_NEXT_PHASE_v0.1.yaml
+  notes: "Train BASE only after tokenizer freeze. bringup_8k is runtime probe only."
 
 architecture:
   type: decoder_only_prenorm_sparse_moe
@@ -41,6 +48,7 @@ architecture:
   attention: gqa
   train_context: 4096
   infer_context: 8192
+  vocab_note: "8192 is temporary architecture default for meta/runtime probes; BASE retargets to MAGI_TOKENIZER_V1 vocab after freeze"
 
 moe:
   gate: sigmoid_normalize_topk
@@ -49,6 +57,7 @@ moe:
   capacity_factor_train_max: 1.25
   load_balance: aux_loss_free_bias
   router_z_loss_coeff: 1.0e-5
+  bias_update_rate: 1.0e-3
   hierarchical_routing_hooks: true
 
 init:
@@ -70,13 +79,22 @@ hardware:
   dtype: bfloat16
   recommended_batch: 1
   recommended_seq: 2048
-  notes: "Sparse MoE; Adam stores ALL experts (~96GB). Active/token ~1B. seq2048 batch1 expected under 141GB."
+  notes: "Sparse MoE; Adam stores ALL experts (~96GB). Active/token ~1B."
 
 tokenizer:
-  id: magi_t4_smoke_v0.1
-  config: configs/tokenizer_t4_smoke_v0.1.yaml
-  artifact: tokenizer/artifacts/magi_t4_smoke_v0.1.json
-  vocab_size: 8192
+  production_id: MAGI_TOKENIZER_V1
+  production_artifact: tokenizer/artifacts/magi_tokenizer_v1.json
+  production_status: MISSING_PENDING_SWEEP
+  bringup_probe_id: magi_bringup_8k_v0.1
+  bringup_probe_config: configs/tokenizer_bringup_8k_v0.1.yaml
+  bringup_probe_artifact: tokenizer/artifacts/magi_bringup_8k_v0.1.json
+  bringup_pretraining_allowed: false
+  bringup_checkpoint_allowed: false
+
+training_plan:
+  r0_tokens: "1e9-3e9"
+  r1_tokens: "1e10-3e10"
+  flagship_after_r1: configs/magi_35b_moe_v0.1.yaml
 
 hf:
   model_type: magi

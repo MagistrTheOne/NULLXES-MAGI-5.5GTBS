@@ -1,64 +1,105 @@
-# Tokenizer experiment matrix v0.1
+# MAGI Tokenizer experiment / freeze matrix v0.1
+# Sweep AFTER MAGI_BASE_PILOT_v0.1. Winner freezes as MAGI_TOKENIZER_V1.
+# bringup_8k is BRINGUP_ONLY — not a production candidate.
 
 meta:
   name: MAGI_TOKENIZER_EXPERIMENTS
   version: v0.1
   program_parent: MAGI-5.5GTBS
-  default_vocab_size: 131072
-  from_nullxes_corpus_only: true
+  status: AWAITING_PILOT_CORPUS
+  production_artifact_exists: false
+  frozen_tokenizer: null
+  bringup_tokenizer: configs/tokenizer_bringup_8k_v0.1.yaml
+  bringup_pretraining_allowed: false
 
-candidates:
-  bpe_131k:
-    algorithm: BPE
-    vocab_size: 131072
+algorithms:
+  byte_bpe:
+    enabled: true
+    algorithm: byte_level_bpe
     byte_fallback: true
     normalization: NFKC
-  unigram_131k:
+  unigram:
+    enabled: true
     algorithm: Unigram
-    vocab_size: 131072
     byte_fallback: true
     normalization: NFKC
-  byte_hybrid_131k:
-    algorithm: byte_level_hybrid
-    vocab_size: 131072
-    byte_fallback: true
-    normalization: NFKC
+  byte_hybrid:
+    enabled: false
+    reason: "disabled until MAGI owns a concrete hybrid algorithm, not a label"
 
-holdout_slices:
-  - ru_formal
-  - ru_informal
-  - ru_slang
-  - en_formal
-  - en_informal
-  - code_python
-  - code_typescript
-  - math_latex
-  - scientific_text
-  - profanity_in_context
-  - emoji_punctuation
-  - ru_en_code_switching
+vocab_sizes:
+  v65536: 65536
+  v98304: 98304
+  v131072: 131072
+  v163840: 163840
 
-metrics:
-  - tokens_per_character
-  - tokens_per_word
-  - compression_ratio
-  - code_fragmentation
-  - russian_morphology_fragmentation
-  - english_fragmentation
-  - math_notation_behavior
-  - rare_symbol_behavior
-  - unknown_rate
-  - profanity_fragmentation
-  - code_switch_fertility
+candidate_grid:
+  count: 8
+  note: "byte_bpe × 4 sizes + unigram × 4 sizes"
+
+tokenizer_train_sample_mixture:
+  status: EXPERIMENTAL_HYPOTHESIS
+  source: MAGI_BASE_PILOT_v0.1_stratified
+  ru_natural: 0.27
+  en_natural: 0.27
+  code: 0.20
+  math_stem: 0.12
+  wikipedia_document: 0.07
+  structured_code_adjacent: 0.04
+  nullxes_domain: 0.03
+  holdout_required: true
+  holdout_never_seen_by_vocab_builder: true
+
+intrinsic_metrics:
+  fertility_ru: true
+  fertility_en: true
+  fertility_code: true
+  fertility_math: true
+  chars_per_token: true
+  bytes_per_token: true
+  tokens_per_word: true
+  cyrillic_fragmentation: true
+  english_fragmentation: true
+  python_fragmentation: true
+  typescript_fragmentation: true
+  identifier_fragmentation: true
+  whitespace_behavior: true
+  indentation_behavior: true
+  latex_fragmentation: true
+  unicode_behavior: true
+  emoji_behavior: true
+  mixed_ru_en_behavior: true
+  byte_fallback_frequency: true
+  pathological_fallback_sequences: true
+  roundtrip_required: true
+  vocabulary_param_cost: true
+
+vocabulary_cost:
+  formula_tied: "vocab_size * d_model"
+  formula_untied: "2 * vocab_size * d_model"
+  note: "164k is not free under tied/untied embeddings"
+
+selection_protocol:
+  step_1: intrinsic_evaluation
+  step_2: reject_pathological
+  step_3: representative_moe_learning_probe
+  probe_constraints: "same_data same_token_budget same_architecture same_optimizer same_compute"
+  winner_metric: "validation_loss_and_learning_efficiency"
+  probe_is_not_magi_roadmap: true
+
+freeze_contract:
+  id: MAGI_TOKENIZER_V1
+  fields: "tokenizer_id vocab_size special_tokens normalization pretokenization merges_or_model training_corpus_manifest_sha artifact_sha256"
+  after_freeze_binds: "MAGI-7B-MoE MAGI-35B-MoE MAGI-CASUAL MAGI_family"
+
+artifacts:
+  tokenizer_model: tokenizer/artifacts/magi_tokenizer_v1.model
+  tokenizer_json: tokenizer/artifacts/magi_tokenizer_v1.json
+  report: tokenizer/reports/tokenizer_eval_v1.md
+  status: MISSING_PENDING_PILOT_AND_SWEEP
 
 rejection_gates:
   unknown_rate_max: 0.001
-  ru_informal_fertility_regression_max: 0.08
-  code_fragmentation_regression_max: 0.10
-  math_symbol_breakage_allowed: false
+  roundtrip_required: true
   byte_fallback_required: true
-
-artifacts:
-  tokenizer_model: tokenizer/artifacts/magi_tokenizer_v0.1.model
-  tokenizer_json: tokenizer/artifacts/magi_tokenizer_v0.1.json
-  report: tokenizer/reports/tokenizer_eval_v0.1.md
+  math_symbol_breakage_allowed: false

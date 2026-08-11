@@ -18,6 +18,7 @@ class RouterTelemetry:
     dead_experts: int
     n_experts: int
     imbalance_ratio: float
+    router_z_loss: float | None
 
 
 def causal_lm_loss(
@@ -35,6 +36,41 @@ def causal_lm_loss(
     )
 
 
+def collect_router_aux_loss(model: torch.nn.Module) -> torch.Tensor | None:
+    """Mean router z-loss across MoE layers (scaled inside each layer)."""
+    losses: list[torch.Tensor] = []
+    for module in model.modules():
+        if not isinstance(module, MoELayer):
+            continue
+        aux = module.router_aux_loss()
+        if aux is not None:
+            losses.append(aux)
+    if not losses:
+        return None
+    return torch.stack(losses).mean()
+
+
+def apply_moe_load_balance_updates(model: torch.nn.Module) -> None:
+    """Aux-loss-free bias updates after an optimizer step (no autograd)."""
+    for module in model.modules():
+        if isinstance(module, MoELayer):
+            module.update_load_balance_bias()
+
+
+def magi_train_loss(
+    model: torch.nn.Module,
+    logits: torch.Tensor,
+    labels: torch.Tensor,
+    *,
+    ignore_index: int = -100,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
+    """Returns (total_loss, ce_loss, router_aux_or_none)."""
+    ce = causal_lm_loss(logits, labels, ignore_index=ignore_index)
+    aux = collect_router_aux_loss(model)
+    total = ce if aux is None else ce + aux
+    return total, ce, aux
+
+
 def collect_router_entropy(model: torch.nn.Module) -> torch.Tensor | None:
     telemetry = collect_router_telemetry(model)
     if telemetry is None:
@@ -45,6 +81,7 @@ def collect_router_entropy(model: torch.nn.Module) -> torch.Tensor | None:
 def collect_router_telemetry(model: torch.nn.Module) -> RouterTelemetry | None:
     """Aggregate MoE router stats across MoE layers (entropy / load / dead experts)."""
     entropies: list[torch.Tensor] = []
+    z_losses: list[torch.Tensor] = []
     load_acc: torch.Tensor | None = None
     n_experts: int | None = None
 
@@ -53,6 +90,7 @@ def collect_router_telemetry(model: torch.nn.Module) -> RouterTelemetry | None:
             continue
         stats = module.last_router_stats
         entropies.append(stats.entropy.detach().float())
+        z_losses.append(stats.router_z_loss.detach().float())
         counts = stats.tokens_per_expert.detach().float()
         if load_acc is None:
             load_acc = counts.clone()
@@ -80,4 +118,5 @@ def collect_router_telemetry(model: torch.nn.Module) -> RouterTelemetry | None:
         dead_experts=dead,
         n_experts=n_experts,
         imbalance_ratio=imbalance,
+        router_z_loss=float(torch.stack(z_losses).mean().item()) if z_losses else None,
     )

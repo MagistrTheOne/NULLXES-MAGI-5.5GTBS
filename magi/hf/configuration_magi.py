@@ -60,12 +60,20 @@ class MagiConfig(PretrainedConfig):
         checkpoint_version: str = CHECKPOINT_VERSION,
         config_version: str = CONFIG_VERSION,
         serialization_version: str = SERIALIZATION_VERSION,
+        moe_load_balance: str | None = None,
+        router_z_loss_coeff: float | None = None,
+        moe_bias_update_rate: float | None = None,
+        moe_gate: str | None = None,
         **kwargs,
     ) -> None:
         # MoE routing width must not collide with HF sampling GenerationConfig.top_k.
         if moe_top_k is None and top_k is not None:
             moe_top_k = top_k
         kwargs.pop("top_k", None)
+        moe_load_balance = kwargs.pop("moe_load_balance", moe_load_balance)
+        router_z_loss_coeff = kwargs.pop("router_z_loss_coeff", router_z_loss_coeff)
+        moe_bias_update_rate = kwargs.pop("moe_bias_update_rate", moe_bias_update_rate)
+        moe_gate = kwargs.pop("moe_gate", moe_gate)
         kwargs.setdefault("architectures", ["MagiForCausalLM"])
         kwargs.setdefault("tie_word_embeddings", tied_embeddings)
         kwargs.setdefault("use_cache", True)
@@ -109,6 +117,10 @@ class MagiConfig(PretrainedConfig):
         self.moe_top_k = _optional_int(moe_top_k)
         self.train_context = _optional_int(train_context)
         self.infer_context = _optional_int(infer_context)
+        self.moe_load_balance = None if moe_load_balance is None else str(moe_load_balance)
+        self.router_z_loss_coeff = None if router_z_loss_coeff is None else float(router_z_loss_coeff)
+        self.moe_bias_update_rate = None if moe_bias_update_rate is None else float(moe_bias_update_rate)
+        self.moe_gate = None if moe_gate is None else str(moe_gate)
         self.architecture_version = str(architecture_version)
         self.checkpoint_version = str(checkpoint_version)
         self.config_version = str(config_version)
@@ -213,6 +225,10 @@ class MagiConfig(PretrainedConfig):
             checkpoint_version=checkpoint_version,
             config_version=config_version,
             serialization_version=serialization_version,
+            moe_load_balance=cfg.moe_load_balance,
+            router_z_loss_coeff=cfg.router_z_loss_coeff,
+            moe_bias_update_rate=cfg.moe_bias_update_rate,
+            moe_gate=cfg.moe_gate,
         )
 
     @classmethod
@@ -248,6 +264,10 @@ class MagiConfig(PretrainedConfig):
             top_k=self.moe_top_k,
             train_context=self.train_context,
             infer_context=self.infer_context,
+            moe_load_balance=getattr(self, "moe_load_balance", None),
+            router_z_loss_coeff=getattr(self, "router_z_loss_coeff", None),
+            moe_bias_update_rate=getattr(self, "moe_bias_update_rate", None),
+            moe_gate=getattr(self, "moe_gate", None),
         )
         cfg.validate()
         return cfg

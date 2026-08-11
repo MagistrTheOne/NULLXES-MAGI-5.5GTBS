@@ -6,13 +6,17 @@ meta:
   version: v0.1
   program_parent: MAGI-5.5GTBS
   reasoning_core_ref: configs/magi_400b_v0.1.yaml
-  status: realization_subsystem
+  status: BLOCKED
   from_zero: true
   model_class: dense_decoder
   primary_role: language_realization
   not_primary_reasoner: true
   tokenizer_ref: configs/tokenizer_experiments_v0.1.yaml
   hf_architecture: MagiForCausalLM
+  production_pretraining_allowed: false
+  blocked_reasons: "production_tokenizer_missing; MAGI_BASE_checkpoint_missing"
+  genealogy: "MAGI_BASE → posttrain → INSTRUCT → CASUAL+CHARACTER → MAGI"
+  notes: "Do NOT train Casual from random init. Descendant of BASE only."
 
 architecture:
   type: decoder_only_prenorm_dense

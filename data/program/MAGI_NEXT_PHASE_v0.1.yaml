@@ -1,0 +1,47 @@
+# MAGI NEXT PHASE — EXECUTION ORDER v0.1
+# Authoritative sequence. Do not invent parallel tracks.
+
+meta:
+  name: MAGI_NEXT_PHASE
+  version: v0.1
+  program_parent: MAGI-5.5GTBS
+  current_phase: DATA_PILOT
+  stop_architecture_scaffolding: true
+
+approved_now:
+  scope: MAGI_DATA_PILOT_v0.1
+  env: MAGI_DATA_PILOT_APPROVED
+  production_env_exists: false
+
+milestones:
+  m01_stop_scaffolding: DONE_WHEN_THIS_FILE_LANDS
+  m02_approve_data_pilot: AWAITING_AUTHOR
+  m03_cloud_ingest_pilot: PENDING
+  m04_build_magi_base_pilot: PENDING
+  m05_corpus_statistics: PENDING
+  m06_tokenizer_sweep: PENDING
+  m07_freeze_magi_tokenizer_v1: PENDING
+  m08_sha256_lock_tokenizer_and_corpus: PENDING
+  m09_retokenize_base_pilot: PENDING
+  m10_train_7b_moe_r0_1_to_3b_tokens: PENDING
+  m11_validate_r0: PENDING
+  m12_train_7b_moe_r1_10_to_30b_tokens: PENDING
+  m13_prepare_35b_moe: PENDING
+
+forbidden_now:
+  train_production_on_bringup_8k: true
+  another_tokenizer_placeholder: true
+  character_data_expansion: true
+  bulk_synthetic_generation: true
+  casual_from_random_init: true
+  dense_7b_as_scaling_path: true
+  start_400b: true
+  unapproved_bulk_download: true
+  infrastructure_outside_m01_m13: true
+
+genealogy:
+  magi_tokenizer_v1: "binds entire family after freeze"
+  magi_7b_moe: "SCALE_0 recipe prover before 35B"
+  magi_35b_moe: "flagship BASE after R1 PASS"
+  magi_casual: "posttrain descendant of BASE only"
+  magi_400b: "FUTURE_SCALE_TARGET envelope only"

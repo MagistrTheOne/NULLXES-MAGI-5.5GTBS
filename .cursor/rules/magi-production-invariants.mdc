@@ -1,0 +1,33 @@
+---
+description: MAGI production path invariants — no T4/smoke, no BASE on bringup-8k
+alwaysApply: true
+---
+
+# MAGI Production Invariants (NULLXES)
+
+## Forbidden in production path
+
+Never put into `magi/model/`, `magi/runtime/` (except guards), `magi/train/` product APIs, or production scripts (`train_magi.py`, `h200_train.py`, `magi_chat.py`, `magi_generate.py`, H200 profiles):
+
+- **T4** (Tesla T4) — quarantined / removed
+- `smoke` / `tiny` / `fixture` / `mock` / `toy` as default behavior
+- `TODO` / `FIXME` / "fix later" / placeholders
+- External LLM APIs or foreign `from_pretrained` as MAGI cognition
+- Dense ladder as MAGI roadmap substitute for Sparse-MoE
+- Silent smoke tokenizer / random-weight fallbacks in chat/generate
+- `import t4_*` from production entrypoints
+- **BASE / production checkpoints trained on `magi_bringup_8k`**
+
+`magi_bringup_8k_v0.1` = BRINGUP_ONLY runtime probe. BASE waits for `MAGI_TOKENIZER_V1`.
+
+## If unsure — ASK
+
+Before changing init, defaults, tokenizer binding, checkpoint format, train profiles, or anything that could break H200/machine bring-up: **stop and ask**. Do not invent a T4/smoke fallback. Do not start BASE training without frozen tokenizer.
+
+## Native MAGI path
+
+```text
+MAGI_TOKENIZER_V1 → MAGITransformer → logits → MAGI loss/opt → MAGI checkpoint → MAGI generate
+```
+
+Phase order: `data/program/MAGI_NEXT_PHASE_v0.1.yaml`

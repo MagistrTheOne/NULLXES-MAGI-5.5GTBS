@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""MAGI H200 sparse MoE bring-up trainer (MAGI-7B-MoE default).
+"""MAGI H200 Scale-0 train alias for train_magi.py.
 
-Canonical path: configs/magi_7b_moe_v0.1.yaml (moe_decoder).
-Dense 7B baseline is NOT the default.
-
-Usage:
-  python scripts/h200_train.py --device cuda
-  python scripts/h200_train.py --device cuda --steps 500 --seq 1024
+BASE pretraining requires MAGI_TOKENIZER_V1.
+bringup_8k only via --allow-runtime-probe (no production checkpoint).
 """
 
 from __future__ import annotations
@@ -18,15 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import t4_train_smoke
+import train_magi
 
 
 def main() -> int:
-    if "--profile" not in sys.argv:
-        sys.argv.extend(["--profile", str(ROOT / "configs" / "magi_7b_train_h200_v0.1.yaml")])
-    if "--device" not in sys.argv:
-        sys.argv.extend(["--device", "cuda"])
-    return t4_train_smoke.main()
+    return train_magi.main()
 
 
 if __name__ == "__main__":

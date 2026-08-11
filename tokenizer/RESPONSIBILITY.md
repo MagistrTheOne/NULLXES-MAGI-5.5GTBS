@@ -2,27 +2,36 @@
 
 Owns MAGI tokenizer architecture, experiment matrix, artifact naming, and tokenizer evaluation reports.
 
-## Production path
+## Bring-up tokenizer (engineering only)
 
-Defines the interface and outputs for:
+| Field | Value |
+|-------|-------|
+| Status | **BRINGUP_ONLY** |
+| ID | `magi_bringup_8k_v0.1` |
+| Config | `configs/tokenizer_bringup_8k_v0.1.yaml` |
+| Artifact | `tokenizer/artifacts/magi_bringup_8k_v0.1.json` |
+| Vocab | 8192 |
+| `production_pretraining_allowed` | **false** |
+| `production_checkpoint_allowed` | **false** |
+| Allowed uses | runtime encode/decode, unit gates, `--allow-runtime-probe` |
+| Forbidden | MAGI BASE pretraining, production checkpoints |
 
-- BPE / Unigram / byte-hybrid candidates;
-- vocab size 131072;
-- RU/EN/code/math/profanity/code-switch holdouts;
-- fertility and fragmentation gates;
-- tokenizer artifact paths consumed by shard builders.
+## Production target — MAGI_TOKENIZER_V1 (not frozen)
 
-Authoritative spec: `docs/TOKENIZER_ARCHITECTURE_SPEC_v0.1.md`.
-Experiment matrix: `configs/tokenizer_experiments_v0.1.yaml`.
+Requires `MAGI_BASE_PILOT_v0.1` then sweep:
 
-## Smoke path (T4)
+- algorithms: Byte-level BPE, Unigram (byte_hybrid disabled until concrete MAGI algorithm exists)
+- vocab: 65536 / 98304 / 131072 / 163840 → **8 candidates**
+- selection: intrinsic metrics + representative MoE learning probe
+- freeze fields: id, vocab, specials, normalization, pretokenization, merges/model, corpus manifest SHA, artifact SHA256
 
-Hardware smoke tokenizer for Colab/Tesla T4:
+Matrix: `configs/tokenizer_experiments_v0.1.yaml`  
+Phase order: `data/program/MAGI_NEXT_PHASE_v0.1.yaml`
 
-- config: `configs/tokenizer_t4_smoke_v0.1.yaml`
-- paired model: `configs/magi_t4_smoke_v0.1.yaml`
-- implementation: `magi/tokenizer/byte_bpe.py`
-- artifact: `tokenizer/artifacts/magi_t4_smoke_v0.1.json`
-- runner: `scripts/t4_smoke_run.py`
+Expected after freeze:
 
-Smoke tokenizer is not a substitute for the 131k production candidate matrix.
+- `tokenizer/artifacts/magi_tokenizer_v1.json`
+- `tokenizer/artifacts/magi_tokenizer_v1.model`
+- `tokenizer/reports/tokenizer_eval_v1.md`
+
+Until freeze: MAGI-7B-MoE BASE / 35B / Casual training remain blocked.

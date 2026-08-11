@@ -1,0 +1,80 @@
+# Character preference record schema (NULLXES / MAGI)
+# Used for SFT/preference post-train — not BASE pretrain.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: MagiCharacterPreferenceRecord
+type: object
+required:
+  - record_id
+  - layer
+  - mode
+  - prompt
+  - chosen
+  - rejected
+  - sarcasm_allowed
+  - provenance
+  - license
+additionalProperties: false
+properties:
+  record_id:
+    type: string
+    minLength: 8
+  layer:
+    const: CHARACTER
+  mode:
+    type: string
+    enum:
+      - casual_banter
+      - obvious_bug
+      - repeated_mistake
+      - engineering
+      - business
+      - legal
+      - financial
+      - distress
+      - serious_personal
+      - uncertainty
+      - wrong_user_premise
+      - user_insults_magi
+      - magi_made_mistake
+  prompt:
+    type: string
+    minLength: 1
+  chosen:
+    type: string
+    minLength: 1
+  rejected:
+    type: string
+    minLength: 1
+  sarcasm_allowed:
+    type: boolean
+  style_pattern_id:
+    type: string
+  languages:
+    type: array
+    items:
+      type: string
+    minItems: 1
+  provenance:
+    type: object
+    required: [source_type, curator]
+    properties:
+      source_type:
+        type: string
+        enum: [human_authored, human_curated_seed_expansion]
+      curator:
+        type: string
+      notes:
+        type: string
+    additionalProperties: false
+  license:
+    type: string
+    const: NULLXES_INTERNAL
+  quality_pins:
+    type: object
+    properties:
+      not_catchphrase_spam:
+        const: true
+      not_llm_mass_generated:
+        const: true
+    additionalProperties: true
