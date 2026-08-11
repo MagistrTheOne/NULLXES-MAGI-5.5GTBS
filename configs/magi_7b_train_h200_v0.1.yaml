@@ -1,0 +1,28 @@
+# H200 train profile for MAGI-7B intelligence bring-up
+
+meta:
+  name: MAGI_7B_H200_TRAIN
+  version: v0.1
+  model_config: configs/magi_7b_v0.1.yaml
+  corpus: artifacts/synthetic/magi_synth_h200_v0.1/records.jsonl
+
+train:
+  steps: 2000
+  batch_size: 1
+  seq_len: 2048
+  lr: 3.0e-4
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  eps: 1.0e-8
+  max_grad_norm: 1.0
+  seed: 42
+  use_amp: true
+  amp_dtype: bf16
+  require_loss_improve: true
+  checkpoint_dir: artifacts/h200_7b_train
+
+hardware:
+  target: H200_SXM
+  master_weights: float32
+  compute: bfloat16_autocast

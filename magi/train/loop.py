@@ -26,6 +26,7 @@ class TrainConfig:
     max_grad_norm: float = 1.0
     log_every: int = 1
     use_amp: bool = True
+    amp_dtype: str = "fp16"  # fp16 | bf16
     seed: int = 42
 
 
@@ -118,12 +119,19 @@ def train_steps(
         for param in model.parameters():
             if param.dtype != torch.float32:
                 raise ValueError(
-                    "AMP GradScaler requires fp32 master weights; "
+                    "AMP requires fp32 master weights; "
                     f"found parameter dtype={param.dtype}. "
-                    "Move model with .to(device) only, not dtype=float16."
+                    "Move model with .to(device) only, not dtype=float16/bfloat16."
                 )
 
-    scaler = _make_scaler(config.use_amp and device.type == "cuda", device.type)
+    amp_dtype_name = (config.amp_dtype or "fp16").lower()
+    if amp_dtype_name not in {"fp16", "bf16", "float16", "bfloat16"}:
+        raise ValueError(f"unsupported amp_dtype={config.amp_dtype!r}")
+    use_bf16 = amp_dtype_name in {"bf16", "bfloat16"}
+    # GradScaler is for fp16 only; bf16 on H100/H200 does not use loss scaling.
+    scaler = None
+    if config.use_amp and device.type == "cuda" and not use_bf16:
+        scaler = _make_scaler(True, device.type)
     history: list[TrainMetrics] = []
 
     for step in range(1, config.steps + 1):
@@ -131,8 +139,9 @@ def train_steps(
         optimizer.zero_grad(set_to_none=True)
         t0 = time.perf_counter()
 
-        if scaler is not None:
-            autocast_ctx = torch.autocast(device_type="cuda", dtype=torch.float16)
+        if config.use_amp and device.type == "cuda":
+            cast_dtype = torch.bfloat16 if use_bf16 else torch.float16
+            autocast_ctx = torch.autocast(device_type="cuda", dtype=cast_dtype)
         else:
             from contextlib import nullcontext
 

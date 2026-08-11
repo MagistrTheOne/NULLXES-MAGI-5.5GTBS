@@ -126,6 +126,7 @@ def main() -> int:
             max_grad_norm=float(train_cfg.get("max_grad_norm", 1.0)),
             seed=int(train_cfg.get("seed", 42)),
             use_amp=bool(train_cfg.get("use_amp", True)) and device.type == "cuda",
+            amp_dtype=str(train_cfg.get("amp_dtype", "fp16")),
             log_every=1,
         ),
     )
