@@ -11,6 +11,11 @@ torch = require_torch()
 nn = torch.nn
 F = torch.nn.functional
 
+try:
+    from flash_attn import flash_attn_func as _flash_attn_func
+except Exception:  # pragma: no cover - optional CUDA extension
+    _flash_attn_func = None
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1.0e-6) -> None:
@@ -33,10 +38,9 @@ class RotaryEmbedding(nn.Module):
         self.register_buffer("inv_freq", inv_freq, persistent=False)
 
     def forward(self, position_ids: torch.Tensor, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
-        # position_ids: [batch, seq]
         inv_freq = self.inv_freq.to(device=device)
         flat = position_ids.to(device=device, dtype=inv_freq.dtype).unsqueeze(-1)
-        freqs = flat * inv_freq  # [B, S, d_head/2]
+        freqs = flat * inv_freq
         cos = freqs.cos()[:, :, None, :]
         sin = freqs.sin()[:, :, None, :]
         return cos, sin
@@ -67,8 +71,14 @@ def build_attention_bias(
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.Tensor | None:
-    """Return additive SDPA bias [B, 1, Q, KV], or None when pure causal full-sequence."""
-    has_padding = False
+    """Additive SDPA bias [B, 1, Q, KV], or None for pure causal full-sequence.
+
+    Never calls .item() / GPU sync.
+    """
+    needs_explicit_causal = past_len > 0 or query_len != kv_len
+    if attention_mask is None and not needs_explicit_causal:
+        return None
+
     if attention_mask is not None:
         if attention_mask.dim() != 2:
             raise ValueError("attention_mask must have shape [batch, kv_len]")
@@ -76,18 +86,13 @@ def build_attention_bias(
             raise ValueError(
                 f"attention_mask shape {tuple(attention_mask.shape)} != {(batch, kv_len)}"
             )
-        has_padding = bool(torch.any(attention_mask == 0).item())
-    needs_explicit_causal = past_len > 0 or query_len != kv_len
-    if not has_padding and not needs_explicit_causal:
-        return None
 
     blocked = torch.zeros((batch, 1, query_len, kv_len), dtype=torch.bool, device=device)
     q_pos = torch.arange(past_len, past_len + query_len, device=device)[:, None]
     k_pos = torch.arange(kv_len, device=device)[None, :]
     blocked = blocked | (k_pos > q_pos)
 
-    if has_padding:
-        assert attention_mask is not None
+    if attention_mask is not None:
         pad_blocked = attention_mask.to(device=device) == 0
         blocked = blocked | pad_blocked[:, None, None, :]
 
@@ -138,7 +143,6 @@ class GQAAttention(nn.Module):
         q = apply_rope(q, cos, sin)
         k = apply_rope(k, cos, sin)
 
-        # Cache stores compact GQA K/V: [B, n_kv_heads, S, d_head]
         k_cache = k.transpose(1, 2)
         v_cache = v.transpose(1, 2)
         if past_key_value is not None:
@@ -162,7 +166,7 @@ class GQAAttention(nn.Module):
         )
 
         attn_weights = None
-        if output_attentions or attn_bias is not None:
+        if output_attentions:
             scale = 1.0 / math.sqrt(self.d_head)
             scores = torch.matmul(q_attn.float(), k_attn.float().transpose(-2, -1)) * scale
             if attn_bias is not None:
@@ -171,11 +175,24 @@ class GQAAttention(nn.Module):
                 causal = torch.ones((seq, kv_len), dtype=torch.bool, device=x.device).triu(1)
                 scores = scores.masked_fill(causal, torch.finfo(scores.dtype).min)
             weights = torch.softmax(scores, dim=-1).to(dtype=q_attn.dtype)
-            if output_attentions:
-                attn_weights = weights
+            attn_weights = weights
             y = torch.matmul(weights, v_attn)
-        else:
+        elif attn_bias is None and past_len == 0 and _flash_attn_func is not None and x.is_cuda:
+            # flash-attn: [B, S, H, D]; GQA via distinct q/kv head counts when supported.
+            try:
+                y = _flash_attn_func(
+                    q.contiguous(),
+                    k_cache.transpose(1, 2).contiguous(),
+                    v_cache.transpose(1, 2).contiguous(),
+                    causal=True,
+                )
+                y = y.transpose(1, 2)
+            except Exception:
+                y = F.scaled_dot_product_attention(q_attn, k_attn, v_attn, is_causal=True)
+        elif attn_bias is None:
             y = F.scaled_dot_product_attention(q_attn, k_attn, v_attn, is_causal=True)
+        else:
+            y = F.scaled_dot_product_attention(q_attn, k_attn, v_attn, attn_mask=attn_bias, is_causal=False)
 
         y = y.transpose(1, 2).contiguous().view(batch, seq, self.d_model)
         return self.o_proj(y), present, attn_weights

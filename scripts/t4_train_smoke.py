@@ -37,6 +37,18 @@ def main() -> int:
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--lr", type=float, default=None)
     parser.add_argument("--checkpoint-dir", type=Path, default=None)
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=None,
+        help="write model.safetensors every N steps (0=final only)",
+    )
+    parser.add_argument(
+        "--save-optimizer",
+        action="store_true",
+        help="also dump optimizer.pt (~8 bytes/param) with mid/final checkpoints",
+    )
+    parser.add_argument("--resume", type=Path, default=None, help="step dir or model.safetensors")
     parser.add_argument("--skip-checkpoint", action="store_true")
     parser.add_argument(
         "--corpus",
@@ -67,6 +79,12 @@ def main() -> int:
     lr = float(args.lr if args.lr is not None else train_cfg.get("lr", 1.0e-4))
     require_improve = bool(train_cfg.get("require_loss_improve", True))
     checkpoint_dir = args.checkpoint_dir or ROOT / str(train_cfg.get("checkpoint_dir", "artifacts/t4_train_smoke"))
+    checkpoint_every = int(
+        args.checkpoint_every
+        if args.checkpoint_every is not None
+        else train_cfg.get("checkpoint_every", 0)
+    )
+    save_optimizer = bool(args.save_optimizer or train_cfg.get("save_optimizer", False))
 
     import torch
 
@@ -81,9 +99,9 @@ def main() -> int:
     print(f"model={cfg.name}")
     print(f"device={device}")
     print(f"steps={steps} seq={seq_len} batch={batch_size} lr={lr}")
+    print(f"checkpoint_dir={checkpoint_dir} every={checkpoint_every} save_optimizer={save_optimizer}")
 
-    # Keep master weights in fp32. CUDA AMP autocast handles compute dtype;
-    # GradScaler rejects FP16 parameter gradients.
+    # Keep master weights in fp32. CUDA AMP autocast handles compute dtype.
     model = MAGITransformer.from_config(cfg).to(device=device)
 
     if args.shard is not None:
@@ -113,11 +131,65 @@ def main() -> int:
         print(f"packed_batches={len(batches)}")
         corpus_hash_src = corpus_path
 
+    tokenizer_sha = file_sha256(corpus_hash_src)
+    start_step = 0
+    if args.resume is not None:
+        resume_path = Path(args.resume)
+        if not resume_path.is_absolute():
+            resume_path = (ROOT / resume_path).resolve()
+        loaded = load_train_checkpoint(resume_path, model=model, map_location=device)
+        start_step = int(loaded.get("step") or 0)
+        print(f"resume={resume_path} step={start_step}")
+
+    def _write_ckpt(
+        step: int,
+        loss: float,
+        metrics: dict,
+        *,
+        with_optimizer: bool,
+        update_latest: bool,
+    ) -> Path:
+        return save_train_checkpoint(
+            checkpoint_dir,
+            model=model,
+            optimizer=result_holder["optimizer"],
+            scaler=result_holder["scaler"],
+            step=step,
+            loss=loss,
+            config_path=model_config_path,
+            model_name=cfg.name,
+            tokenizer_id=tokenizer.tokenizer_id,
+            tokenizer_sha256=tokenizer_sha,
+            metrics=metrics,
+            save_optimizer=with_optimizer,
+            update_latest=update_latest,
+        )
+
+    result_holder: dict = {"optimizer": None, "scaler": None}
+
+    def on_step(step, metrics, model_ref, optimizer, scaler):
+        result_holder["optimizer"] = optimizer
+        result_holder["scaler"] = scaler
+        if args.skip_checkpoint or checkpoint_every <= 0:
+            return
+        if step % checkpoint_every != 0:
+            return
+        path = _write_ckpt(
+            step,
+            metrics.loss,
+            {"status": "MID", "step": step, "loss": metrics.loss},
+            with_optimizer=save_optimizer,
+            update_latest=False,
+        )
+        print(f"checkpoint_mid={path}")
+
+    run_steps = steps if start_step == 0 else max(1, steps - start_step)
+
     result = train_steps(
         model,
         batches,
         config=TrainConfig(
-            steps=steps,
+            steps=run_steps,
             lr=lr,
             weight_decay=float(train_cfg.get("weight_decay", 0.1)),
             beta1=float(train_cfg.get("beta1", 0.9)),
@@ -128,36 +200,49 @@ def main() -> int:
             use_amp=bool(train_cfg.get("use_amp", True)) and device.type == "cuda",
             amp_dtype=str(train_cfg.get("amp_dtype", "fp16")),
             log_every=1,
+            checkpoint_every=checkpoint_every,
         ),
+        on_step=None if args.skip_checkpoint else on_step,
     )
+    result_holder["optimizer"] = result.optimizer
+    result_holder["scaler"] = result.scaler
     summary = result.summary
+    # Renumber absolute steps if resumed.
+    if start_step:
+        for item in result.history:
+            item.step += start_step
+        summary["steps"] = result.history[-1].step
+        summary["resumed_from"] = start_step
+
     print("=== SUMMARY ===")
     print(json.dumps(summary, indent=2, sort_keys=True))
 
+    if not args.skip_checkpoint and result.history:
+        ckpt = _write_ckpt(
+            result.history[-1].step,
+            result.history[-1].loss,
+            summary,
+            with_optimizer=save_optimizer or summary.get("status") in {"OK", "INTERRUPTED"},
+            update_latest=True,
+        )
+        print(f"checkpoint={ckpt}")
+        print(f"checkpoint_root={checkpoint_dir / 'model.safetensors'}")
+        loaded = load_train_checkpoint(
+            checkpoint_dir / "model.safetensors",
+            model=MAGITransformer.from_config(cfg),
+            map_location="cpu",
+        )
+        print(f"checkpoint_reload_step={loaded.get('step')}")
+
     if summary["status"] == "NAN_STOP":
         raise SystemExit("training stopped on NaN")
+    if summary["status"] == "INTERRUPTED":
+        print("status=INTERRUPTED")
+        return 130
     if require_improve and not summary.get("loss_improved", False):
         raise SystemExit(
             f"loss did not improve: first={summary['first_loss']} last={summary['last_loss']}"
         )
-
-    if not args.skip_checkpoint:
-        ckpt = save_train_checkpoint(
-            checkpoint_dir,
-            model=model,
-            optimizer=result.optimizer,
-            scaler=result.scaler,
-            step=result.history[-1].step,
-            loss=result.history[-1].loss,
-            config_path=model_config_path,
-            model_name=cfg.name,
-            tokenizer_id=tokenizer.tokenizer_id,
-            tokenizer_sha256=file_sha256(corpus_hash_src),
-            metrics=summary,
-        )
-        loaded = load_train_checkpoint(ckpt, model=MAGITransformer.from_config(cfg), map_location="cpu")
-        print(f"checkpoint={ckpt}")
-        print(f"checkpoint_reload_step={loaded['step']}")
 
     if device.type == "cuda":
         print(f"cuda_allocated_gb={torch.cuda.memory_allocated(device)/(1024**3):.3f}")

@@ -21,6 +21,8 @@ train:
   amp_dtype: bf16
   require_loss_improve: true
   checkpoint_dir: artifacts/h200_7b_train
+  checkpoint_every: 100
+  save_optimizer: false
 
 hardware:
   target: H200_SXM

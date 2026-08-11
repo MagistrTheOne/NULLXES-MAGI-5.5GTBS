@@ -52,6 +52,8 @@ class T4TrainSmokeTests(unittest.TestCase):
                 metrics=result.summary,
             )
             self.assertTrue(path.exists())
+            self.assertEqual(path.name, "model.safetensors")
+            self.assertTrue((Path(tmp) / "model.safetensors").exists())
             self.assertTrue((Path(tmp) / "train_meta.json").exists())
 
 

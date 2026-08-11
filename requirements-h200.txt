@@ -1,0 +1,7 @@
+# RunPod H200 — MAGI-7B deps (torch already in image)
+transformers==4.57.1
+safetensors>=0.4.5
+huggingface_hub>=0.24.0
+pyyaml>=6.0
+# Optional: flash-attn (build may take several minutes on pod)
+# pip install flash-attn --no-build-isolation

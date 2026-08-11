@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from magi.model.transformer import MAGITransformer
 from magi.model.torch_runtime import require_torch
@@ -28,6 +28,7 @@ class TrainConfig:
     use_amp: bool = True
     amp_dtype: str = "fp16"  # fp16 | bf16
     seed: int = 42
+    checkpoint_every: int = 0
 
 
 @dataclass
@@ -49,6 +50,12 @@ class TrainResult:
     summary: dict[str, Any]
 
 
+StepCallback = Callable[
+    [int, TrainMetrics, MAGITransformer, torch.optim.Optimizer, Any],
+    None,
+]
+
+
 def _grad_norm(model: torch.nn.Module) -> float:
     total = 0.0
     for param in model.parameters():
@@ -64,6 +71,12 @@ def _make_scaler(enabled: bool, device_type: str):
     if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
         return torch.amp.GradScaler("cuda")
     return torch.cuda.amp.GradScaler()
+
+
+def _batch_token_count(batch: PackedTokenBatch) -> int:
+    if batch.attention_mask is None:
+        return int(batch.input_ids.numel())
+    return int(batch.attention_mask.sum().item())
 
 
 def summarize_history(history: Sequence[TrainMetrics]) -> dict[str, Any]:
@@ -96,6 +109,7 @@ def train_steps(
     batches: Sequence[PackedTokenBatch],
     *,
     config: TrainConfig,
+    on_step: StepCallback | None = None,
 ) -> TrainResult:
     if not batches:
         raise ValueError("batches must be non-empty")
@@ -133,76 +147,88 @@ def train_steps(
     if config.use_amp and device.type == "cuda" and not use_bf16:
         scaler = _make_scaler(True, device.type)
     history: list[TrainMetrics] = []
+    interrupted = False
 
-    for step in range(1, config.steps + 1):
-        batch = batches[(step - 1) % len(batches)]
-        optimizer.zero_grad(set_to_none=True)
-        t0 = time.perf_counter()
+    try:
+        for step in range(1, config.steps + 1):
+            batch = batches[(step - 1) % len(batches)]
+            optimizer.zero_grad(set_to_none=True)
+            t0 = time.perf_counter()
 
-        if config.use_amp and device.type == "cuda":
-            cast_dtype = torch.bfloat16 if use_bf16 else torch.float16
-            autocast_ctx = torch.autocast(device_type="cuda", dtype=cast_dtype)
-        else:
-            from contextlib import nullcontext
+            if config.use_amp and device.type == "cuda":
+                cast_dtype = torch.bfloat16 if use_bf16 else torch.float16
+                autocast_ctx = torch.autocast(device_type="cuda", dtype=cast_dtype)
+            else:
+                from contextlib import nullcontext
 
-            autocast_ctx = nullcontext()
+                autocast_ctx = nullcontext()
 
-        with autocast_ctx:
-            out = model(
-                batch.input_ids,
-                attention_mask=batch.attention_mask,
-                use_cache=False,
-                return_dict=True,
-            )
-            loss = causal_lm_loss(out.logits, batch.labels)
-
-        if not torch.isfinite(loss):
-            history.append(
-                TrainMetrics(
-                    step=step,
-                    loss=float("nan"),
-                    grad_norm=float("nan"),
-                    tokens_per_second=0.0,
-                    router_entropy=None,
-                    lr=config.lr,
-                    nan=True,
+            with autocast_ctx:
+                out = model(
+                    batch.input_ids,
+                    attention_mask=batch.attention_mask,
+                    use_cache=False,
+                    return_dict=True,
                 )
+                loss = causal_lm_loss(out.logits, batch.labels)
+
+            if not torch.isfinite(loss):
+                history.append(
+                    TrainMetrics(
+                        step=step,
+                        loss=float("nan"),
+                        grad_norm=float("nan"),
+                        tokens_per_second=0.0,
+                        router_entropy=None,
+                        lr=config.lr,
+                        nan=True,
+                    )
+                )
+                break
+
+            if scaler is not None:
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
+                grad_norm = _grad_norm(model)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
+                grad_norm = _grad_norm(model)
+                optimizer.step()
+
+            elapsed = max(time.perf_counter() - t0, 1.0e-9)
+            tokens = _batch_token_count(batch)
+            entropy = collect_router_entropy(model)
+            metrics = TrainMetrics(
+                step=step,
+                loss=float(loss.detach().float().item()),
+                grad_norm=float(grad_norm),
+                tokens_per_second=tokens / elapsed,
+                router_entropy=None if entropy is None else float(entropy.float().item()),
+                lr=config.lr,
+                nan=False,
             )
-            break
+            history.append(metrics)
+            if config.log_every > 0 and (step % config.log_every == 0 or step == config.steps):
+                ent = "n/a" if metrics.router_entropy is None else f"{metrics.router_entropy:.4f}"
+                print(
+                    f"step={metrics.step} loss={metrics.loss:.6f} "
+                    f"grad_norm={metrics.grad_norm:.4f} tok/s={metrics.tokens_per_second:.1f} "
+                    f"router_entropy={ent}"
+                )
+            if on_step is not None:
+                on_step(step, metrics, model, optimizer, scaler)
+    except KeyboardInterrupt:
+        interrupted = True
+        print("=== INTERRUPTED — flushing checkpoint via caller ===")
 
-        if scaler is not None:
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
-            grad_norm = _grad_norm(model)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.max_grad_norm)
-            grad_norm = _grad_norm(model)
-            optimizer.step()
-
-        elapsed = max(time.perf_counter() - t0, 1.0e-9)
-        tokens = int(batch.attention_mask.sum().item())
-        entropy = collect_router_entropy(model)
-        metrics = TrainMetrics(
-            step=step,
-            loss=float(loss.detach().float().item()),
-            grad_norm=float(grad_norm),
-            tokens_per_second=tokens / elapsed,
-            router_entropy=None if entropy is None else float(entropy.float().item()),
-            lr=config.lr,
-            nan=False,
-        )
-        history.append(metrics)
-        if config.log_every > 0 and (step % config.log_every == 0 or step == config.steps):
-            ent = "n/a" if metrics.router_entropy is None else f"{metrics.router_entropy:.4f}"
-            print(
-                f"step={metrics.step} loss={metrics.loss:.6f} "
-                f"grad_norm={metrics.grad_norm:.4f} tok/s={metrics.tokens_per_second:.1f} "
-                f"router_entropy={ent}"
-            )
-
+    if not history:
+        raise RuntimeError("training produced no steps")
     summary = summarize_history(history)
+    if interrupted:
+        summary["status"] = "INTERRUPTED"
+        summary["interrupted"] = True
     return TrainResult(history=history, optimizer=optimizer, scaler=scaler, summary=summary)

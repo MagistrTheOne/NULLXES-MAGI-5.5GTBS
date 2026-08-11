@@ -16,7 +16,7 @@ torch = require_torch()
 @dataclass(frozen=True)
 class PackedTokenBatch:
     input_ids: torch.Tensor
-    attention_mask: torch.Tensor
+    attention_mask: torch.Tensor | None
     labels: torch.Tensor
 
 
@@ -68,7 +68,9 @@ def pack_token_ids(
         attention_mask = (ids != pad_id).long()
         labels = ids.clone()
         labels[attention_mask == 0] = -100
-        batches.append(PackedTokenBatch(input_ids=ids, attention_mask=attention_mask, labels=labels))
+        # Fully dense windows: drop mask so attention uses flash / SDPA is_causal (no GPU sync).
+        mask_out = None if bool(attention_mask.all()) else attention_mask
+        batches.append(PackedTokenBatch(input_ids=ids, attention_mask=mask_out, labels=labels))
     return batches
 
 
@@ -123,5 +125,6 @@ def pack_texts(
         attention_mask = (ids != pad).long()
         labels = ids.clone()
         labels[attention_mask == 0] = -100
-        batches.append(PackedTokenBatch(input_ids=ids, attention_mask=attention_mask, labels=labels))
+        mask_out = None if bool(attention_mask.all()) else attention_mask
+        batches.append(PackedTokenBatch(input_ids=ids, attention_mask=mask_out, labels=labels))
     return batches

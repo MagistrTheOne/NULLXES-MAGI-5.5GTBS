@@ -59,8 +59,20 @@ Helpers:
 - `magi.hf.serialization.save_state_dict`
 - `magi.hf.serialization.load_state_dict`
 
-## Manifest Authority
+## Single-GPU Train Checkpoint (`magi_single_gpu_v0.2`)
 
-Manifest metadata is not duplicated into ad-hoc sidecar files.
-HF config stores architecture and version fields.
-Checkpoint manifests store provenance and parallelism.
+Canonical weights: **`model.safetensors`**.
+
+Layout:
+
+```text
+artifacts/.../
+  model.safetensors          # latest
+  train_meta.json
+  step-000100/
+    model.safetensors
+    train_meta.json
+    optimizer.pt             # optional (--save-optimizer)
+```
+
+Legacy `train.pt` (v0.1) still loads via `load_train_checkpoint`.

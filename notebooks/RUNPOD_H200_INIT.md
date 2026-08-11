@@ -6,21 +6,18 @@
 
 ---
 
-## Model (фиксируем)
+## Model
 
 **Train target: MAGI-7B — 6.413B dense.**
 
 | Модель | На 1× H200 |
 |--------|------------|
-| **MAGI-7B (6.413B)** | **FULL AdamW train** — основной run |
-| MAGI-CASUAL 13.789B | forward/load ok; full Adam почти в потолок 141GB |
-| MAGI-35B / 400B | train на 1 GPU — нет (нужен cluster / ZeRO) |
-| MAGI-T4-SMOKE 116M | только kernel smoke, **не** H200 workhorse |
+| **MAGI-7B (6.413B)** | **FULL AdamW train** |
+| MAGI-CASUAL 13.789B | forward/load ok; full Adam почти потолок |
+| MAGI-35B / 400B | не на 1 GPU |
+| MAGI-T4-SMOKE 116M | только kernel smoke |
 
-Почему не «70–100B»: bf16 веса 70B ≈ 140GB — это **inference fill**.  
-Full Adam from-scratch ≈ **8 байт/параметр** на m+v → 70B train ≈ **560GB+** только оптимизатор. На 1×H200 без ZeRO это невозможно. 7B — честный full-train на карте.
-
-VRAM 7B (оценка): bf16 weights ~13GB + Adam fp32 ~51GB + activations seq2k ≈ **<100GB**.
+Checkpoint: **`model.safetensors`** (канон). `optimizer.pt` — опционально (`--save-optimizer`, ~50GB на 7B).
 
 ---
 
@@ -30,39 +27,42 @@ VRAM 7B (оценка): bf16 weights ~13GB + Adam fp32 ~51GB + activations seq2k
 nvidia-smi
 python -c "import torch; print(torch.__version__, torch.cuda.get_device_name(0), round(torch.cuda.get_device_properties(0).total_memory/1024**3,1))"
 
-pip -q install "transformers==4.57.1" safetensors huggingface_hub
-# НЕ: pip install -U torch
-
 cd /workspace
 git clone https://github.com/MagistrTheOne/NULLXES-MAGI-5.5GTBS.git || true
 cd NULLXES-MAGI-5.5GTBS
 git pull --ff-only origin main
 export PYTHONPATH=$PWD:$PYTHONPATH
 
-# HF (когда будет токен):
-# export HF_TOKEN=hf_...
-# huggingface-cli login --token "$HF_TOKEN"
+pip -q install -r requirements-h200.txt
+# Optional flash-attn (иначе PyTorch SDPA flash/mem-efficient):
+# pip install flash-attn --no-build-isolation
 
 python scripts/param_count.py --config configs/magi_7b_v0.1.yaml
-python scripts/validate_config.py --config configs/magi_7b_v0.1.yaml
 
 python scripts/build_synthetic_dataset.py --docs 20000 --seed 42 --seq 512 \
   --output artifacts/synthetic/magi_synth_h200_v0.1
 
-# MAIN TRAIN — MAGI-7B
+# MAIN — mid ckpt every 100 steps → artifacts/h200_7b_train/step-XXXXXX/model.safetensors
+# Ctrl+C → пишет final/latest model.safetensors
 python scripts/h200_train.py --device cuda --steps 2000 --seq 2048 \
   --corpus artifacts/synthetic/magi_synth_h200_v0.1/records.jsonl \
-  --checkpoint-dir artifacts/h200_7b_train
+  --checkpoint-dir artifacts/h200_7b_train \
+  --checkpoint-every 100
 
-# If VRAM tight:
-# python scripts/h200_train.py --device cuda --steps 2000 --seq 1024 --corpus ...
+# Resume:
+# python scripts/h200_train.py --device cuda --steps 2000 --seq 2048 \
+#   --corpus artifacts/synthetic/magi_synth_h200_v0.1/records.jsonl \
+#   --checkpoint-dir artifacts/h200_7b_train \
+#   --resume artifacts/h200_7b_train/step-000400
 ```
 
-Успех: `model=MAGI-7B`, `loss_improved=true`, ckpt в `artifacts/h200_7b_train/`.
+Успех: `model=MAGI-7B`, `loss_improved=true`, веса в `artifacts/h200_7b_train/model.safetensors`.
+
+Synth corpus — bring-up only; loss →0 = memorization, не intelligence. Для реального run нужен внешний corpus.
 
 ---
 
-## Optional CASUAL capacity proof (не train)
+## Optional CASUAL capacity proof
 
 ```bash
 python - <<'PY'
@@ -85,7 +85,7 @@ PY
 ## Stop rules
 
 - NaN → stop  
-- OOM на seq 2048 → `--seq 1024` или `512`  
-- не ставить `-U torch`  
-- не запускать 35B/400B train на 1×H200  
-- скачать ckpt до kill pod: `ls -lh artifacts/h200_7b_train/`
+- OOM на seq 2048 → `--seq 1024`  
+- не `-U torch`  
+- не 35B/400B train на 1×H200  
+- скачать до kill: `ls -lh artifacts/h200_7b_train/model.safetensors artifacts/h200_7b_train/step-*/`
